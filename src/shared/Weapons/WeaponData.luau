@@ -6,6 +6,7 @@ local WeaponData = {
 		MaxAmmo = 30,
 		ReloadTime = 2,
 		Automatic = true,
+		IdleAnimation = "rbxassetid://99710352770917", -- Replace with your AR Idle ID
 	},
 
 	CombatKnife = {
@@ -14,6 +15,7 @@ local WeaponData = {
 		FireRate = 0.6,
 		Range = 5,
 		Automatic = false,
+		IdleAnimation = "rbxassetid://99710352770917", -- Replace with your Karambit Idle ID
 	},
 }
 

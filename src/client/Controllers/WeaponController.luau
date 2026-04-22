@@ -1,7 +1,7 @@
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService") -- Added RunService
+local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local WeaponData = require(Shared.Weapons.WeaponData)
@@ -14,7 +14,10 @@ WeaponController.EquippedWeapon = nil
 WeaponController.CurrentWeaponModel = nil
 WeaponController.CanAttack = true
 WeaponController.IsHoldingTrigger = false
-WeaponController.VisibilityConnection = nil -- Variable to hold our loop
+WeaponController.VisibilityConnection = nil
+
+-- NEW: Variable to track the currently playing animation
+WeaponController.CurrentIdleTrack = nil
 
 function WeaponController:Start()
 	print("WeaponController Started.")
@@ -65,6 +68,50 @@ function WeaponController:EquipWeapon(weaponName)
 	print("Swapped to: " .. weaponName)
 
 	self:WeldWeaponToCharacter(weaponName)
+
+	-- NEW: Play the idle animation after welding
+	self:PlayIdleAnimation(weaponName)
+end
+
+-- NEW: Function to handle animation playing
+function WeaponController:PlayIdleAnimation(weaponName)
+	local player = Players.LocalPlayer
+	local character = player.Character
+	if not character then
+		return
+	end
+
+	local humanoid = character:FindFirstChild("Humanoid")
+	if not humanoid then
+		return
+	end
+
+	-- Get or create the Animator
+	local animator = humanoid:FindFirstChild("Animator")
+	if not animator then
+		animator = Instance.new("Animator")
+		animator.Parent = humanoid
+	end
+
+	-- Stop the old animation if one is playing
+	if self.CurrentIdleTrack then
+		self.CurrentIdleTrack:Stop()
+		self.CurrentIdleTrack:Destroy()
+		self.CurrentIdleTrack = nil
+	end
+
+	-- Load and play the new animation
+	local animId = WeaponData[weaponName].IdleAnimation
+	if animId and animId ~= "rbxassetid://00000000000" then
+		local animation = Instance.new("Animation")
+		animation.AnimationId = animId
+
+		self.CurrentIdleTrack = animator:LoadAnimation(animation)
+		self.CurrentIdleTrack.Looped = true
+		-- Set priority to Action so it overrides the default Roblox standing pose
+		self.CurrentIdleTrack.Priority = Enum.AnimationPriority.Action
+		self.CurrentIdleTrack:Play()
+	end
 end
 
 function WeaponController:WeldWeaponToCharacter(weaponName)
@@ -94,34 +141,47 @@ function WeaponController:WeldWeaponToCharacter(weaponName)
 			return
 		end
 
-		-- PHYSICS & WELDING FIX
+		newWeapon.PrimaryPart = handle
+
 		for _, part in pairs(newWeapon:GetDescendants()) do
 			if part:IsA("BasePart") then
 				part.CanCollide = false
 				part.Anchored = false
 				part.Massless = true
 
-				-- If this part isn't the handle, weld it to the handle!
-				if part ~= handle then
-					local internalWeld = Instance.new("WeldConstraint")
-					internalWeld.Part0 = handle
-					internalWeld.Part1 = part
-					internalWeld.Parent = handle
+				for _, child in pairs(part:GetChildren()) do
+					if child:IsA("Weld") or child:IsA("Motor6D") or child:IsA("WeldConstraint") then
+						child:Destroy()
+					end
 				end
 			end
 		end
 
-		if newWeapon.PrimaryPart then
-			newWeapon:PivotTo(rightArm.CFrame)
-		else
-			local offset = handle.CFrame:Inverse() * newWeapon:GetPivot()
-			newWeapon:PivotTo(rightArm.CFrame * offset)
+		-- GRIP OFFSET CALCULATION
+		local gripPoint = handle:FindFirstChild("GripPoint")
+		local offset = CFrame.new() -- Default to no offset
+
+		if gripPoint then
+			-- If the attachment exists, calculate the inverse offset.
+			-- This aligns the GripPoint's position/rotation directly with the arm.
+			offset = gripPoint.CFrame:Inverse()
+		end
+
+		-- Move the weapon using the offset BEFORE welding
+		newWeapon:PivotTo(rightArm.CFrame * offset)
+
+		for _, part in pairs(newWeapon:GetDescendants()) do
+			if part:IsA("BasePart") and part ~= handle then
+				local internalWeld = Instance.new("WeldConstraint")
+				internalWeld.Part0 = handle
+				internalWeld.Part1 = part
+				internalWeld.Parent = handle
+			end
 		end
 
 		newWeapon.Parent = character
 		self.CurrentWeaponModel = newWeapon
 
-		-- Weld the handle to the arm
 		local armWeld = Instance.new("WeldConstraint")
 		armWeld.Part0 = rightArm
 		armWeld.Part1 = handle
