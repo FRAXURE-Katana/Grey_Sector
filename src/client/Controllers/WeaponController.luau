@@ -18,8 +18,12 @@ WeaponController.IsReloading = false
 WeaponController.CurrentIdleTrack = nil
 WeaponController.CurrentReloadTrack = nil
 
+-- NEW: Combo Tracking Variables
+WeaponController.CurrentComboIndex = 1
+WeaponController.LastAttackTime = 0
+
 function WeaponController:Start()
-	print("WeaponController Started (Audio Enabled).")
+	print("WeaponController Started (Combo System Enabled).")
 
 	local player = Players.LocalPlayer
 
@@ -104,6 +108,9 @@ function WeaponController:HookToolEvents(tool, character)
 	tool.Equipped:Connect(function()
 		self.EquippedWeapon = weaponName
 		self.IsHoldingTrigger = false
+
+		-- Reset combo when pulling out the weapon
+		self.CurrentComboIndex = 1
 
 		if tool:GetAttribute("CurrentAmmo") then
 			print(
@@ -191,14 +198,10 @@ function WeaponController:PlaySound(soundId, parentPart, pitch)
 
 	local sound = Instance.new("Sound")
 	sound.SoundId = soundId
-
-	-- If a pitch is provided, apply it. Otherwise, default to 1.
 	sound.PlaybackSpeed = pitch or 1
-
 	sound.Parent = parentPart
 	sound:Play()
 
-	-- Delete the sound object automatically after a few seconds so memory doesn't leak
 	Debris:AddItem(sound, 3)
 end
 
@@ -233,7 +236,6 @@ function WeaponController:ReloadWeapon()
 	self.IsHoldingTrigger = false
 	print("Reloading " .. self.EquippedWeapon .. "...")
 
-	-- PLAY RELOAD AUDIO
 	self:PlaySound(stats.ReloadSound, tool:FindFirstChild("Handle"))
 
 	local humanoid = player.Character:FindFirstChild("Humanoid")
@@ -351,18 +353,16 @@ function WeaponController:PerformAttack(stats)
 
 		tool:SetAttribute("CurrentAmmo", currentAmmo - 1)
 
-		-- AUDIO: Generate a random pitch between 0.9 and 1.1
-		local randomPitch = math.random(95, 105) / 100
+		local randomPitch = math.random(90, 110) / 100
 		self:PlaySound(stats.ShootSound, tool:FindFirstChild("Handle"), randomPitch)
 
-		-- ANIMATION: Play the shooting animation
 		local humanoid = character:FindFirstChild("Humanoid")
 		local animator = humanoid and humanoid:FindFirstChild("Animator")
 		if animator and stats.ShootAnimation and stats.ShootAnimation ~= "rbxassetid://00000000000" then
 			local animation = Instance.new("Animation")
 			animation.AnimationId = stats.ShootAnimation
 			local track = animator:LoadAnimation(animation)
-			track.Priority = Enum.AnimationPriority.Action3 -- High priority so it overrides Idle
+			track.Priority = Enum.AnimationPriority.Action3
 			track:Play()
 		end
 
@@ -394,19 +394,36 @@ function WeaponController:PerformAttack(stats)
 			return
 		end
 
-		-- AUDIO: Generate a random pitch for sword swings too!
 		local randomPitch = math.random(90, 110) / 100
 		self:PlaySound(stats.SwingSound, tool:FindFirstChild("Handle"), randomPitch)
 
-		-- ANIMATION: Play the sword swing animation
+		-- NEW: Combo System Logic
 		local humanoid = character:FindFirstChild("Humanoid")
 		local animator = humanoid and humanoid:FindFirstChild("Animator")
-		if animator and stats.AttackAnimation and stats.AttackAnimation ~= "rbxassetid://00000000000" then
-			local animation = Instance.new("Animation")
-			animation.AnimationId = stats.AttackAnimation
-			local track = animator:LoadAnimation(animation)
-			track.Priority = Enum.AnimationPriority.Action3
-			track:Play()
+
+		-- Reset combo if it's been more than 1.5 seconds since the last swing
+		if os.clock() - self.LastAttackTime > 1.5 then
+			self.CurrentComboIndex = 1
+		end
+		self.LastAttackTime = os.clock()
+
+		if animator and stats.AttackAnimations and #stats.AttackAnimations > 0 then
+			-- Ensure the index loops back around if it goes out of bounds
+			if self.CurrentComboIndex > #stats.AttackAnimations then
+				self.CurrentComboIndex = 1
+			end
+
+			local animId = stats.AttackAnimations[self.CurrentComboIndex]
+			if animId and animId ~= "rbxassetid://00000000000" then
+				local animation = Instance.new("Animation")
+				animation.AnimationId = animId
+				local track = animator:LoadAnimation(animation)
+				track.Priority = Enum.AnimationPriority.Action3
+				track:Play()
+			end
+
+			-- Prepare the next animation for the next click
+			self.CurrentComboIndex += 1
 		end
 
 		local rootPart = character:FindFirstChild("HumanoidRootPart")
