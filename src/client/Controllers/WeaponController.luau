@@ -8,7 +8,7 @@ local Debris = game:GetService("Debris")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local WeaponData = require(Shared.Weapons.WeaponData)
 
-local WeaponModels = ReplicatedStorage:WaitForChild("Models"):WaitForChild("Weapons")
+-- We no longer need WeaponModels here since the Server gives us the tools!
 local Cosmetics = ReplicatedStorage:WaitForChild("Cosmetics")
 
 local WeaponController = {}
@@ -19,7 +19,7 @@ WeaponController.IsHoldingTrigger = false
 WeaponController.CurrentIdleTrack = nil
 
 function WeaponController:Start()
-	print("WeaponController Started (Cosmetics Enabled).")
+	print("WeaponController Started (Server Loadout Enabled).")
 
 	local player = Players.LocalPlayer
 
@@ -35,6 +35,7 @@ function WeaponController:Start()
 			return
 		end
 
+		-- Shooting Input
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			if not self.EquippedWeapon then
 				return
@@ -43,6 +44,7 @@ function WeaponController:Start()
 			self:HandleAttackInput()
 		end
 
+		-- Swapping Input
 		local character = player.Character
 		local humanoid = character and character:FindFirstChild("Humanoid")
 		local backpack = player:FindFirstChild("Backpack")
@@ -73,52 +75,47 @@ function WeaponController:SetupCharacter(character)
 	local player = Players.LocalPlayer
 	local backpack = player:WaitForChild("Backpack")
 
-	backpack:ClearAllChildren()
+	-- Listen for the Server dropping tools into our backpack
+	backpack.ChildAdded:Connect(function(child)
+		if child:IsA("Tool") then
+			self:HookToolEvents(child, character)
+		end
+	end)
 
-	self:GiveTool("AssaultRifle", backpack, character)
-	self:GiveTool("Sword", backpack, character)
-
-	task.wait(0.1)
-	local humanoid = character:FindFirstChild("Humanoid")
-	local arTool = backpack:FindFirstChild("AssaultRifle")
-	if humanoid and arTool then
-		humanoid:EquipTool(arTool)
+	-- Hook any tools that might already be there if the client loaded slowly
+	for _, child in pairs(backpack:GetChildren()) do
+		if child:IsA("Tool") then
+			self:HookToolEvents(child, character)
+		end
 	end
+
+	-- Give the server a brief moment to drop the tools in, then force-equip the AR
+	task.delay(0.5, function()
+		local humanoid = character:FindFirstChild("Humanoid")
+		local arTool = backpack:FindFirstChild("AssaultRifle")
+		if humanoid and arTool then
+			humanoid:EquipTool(arTool)
+		end
+	end)
 end
 
-function WeaponController:GiveTool(weaponName, backpack, character)
-	local template = WeaponModels:FindFirstChild(weaponName)
-	if not template or not template:IsA("Tool") then
-		return
-	end
+function WeaponController:HookToolEvents(tool, character)
+	local weaponName = tool.Name
 
-	local newTool = template:Clone()
-
-	-- ==========================================
-	-- MOCK LOADOUT APPLY (Will be moved to Server later)
-	-- ==========================================
-	if weaponName == "AssaultRifle" then
-		-- In the future, the Server will check what the player bought in the store
-		-- and apply these attributes before giving them the tool!
-		newTool:SetAttribute("MuzzleFlash", "StandardFlash")
-		newTool:SetAttribute("Tracer", "StandardTracer")
-	end
-
-	newTool.Equipped:Connect(function()
+	tool.Equipped:Connect(function()
 		self.EquippedWeapon = weaponName
 		self.IsHoldingTrigger = false
+		print("Equipped: " .. weaponName)
 		self:PlayIdleAnimation(weaponName, character)
 	end)
 
-	newTool.Unequipped:Connect(function()
+	tool.Unequipped:Connect(function()
 		if self.EquippedWeapon == weaponName then
 			self.EquippedWeapon = nil
 			self.IsHoldingTrigger = false
 		end
 		self:StopIdleAnimation()
 	end)
-
-	newTool.Parent = backpack
 end
 
 function WeaponController:PlayIdleAnimation(weaponName, character)
@@ -135,7 +132,9 @@ function WeaponController:PlayIdleAnimation(weaponName, character)
 
 	self:StopIdleAnimation()
 
-	local animId = WeaponData[weaponName].IdleAnimation
+	local stats = WeaponData[weaponName]
+	local animId = stats and stats.IdleAnimation
+
 	if animId and animId ~= "rbxassetid://00000000000" then
 		local animation = Instance.new("Animation")
 		animation.AnimationId = animId
