@@ -1,12 +1,15 @@
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local WeaponData = require(Shared.Weapons.WeaponData)
 
 local WeaponModels = ReplicatedStorage:WaitForChild("Models"):WaitForChild("Weapons")
+local Cosmetics = ReplicatedStorage:WaitForChild("Cosmetics")
 
 local WeaponController = {}
 
@@ -14,14 +17,12 @@ WeaponController.EquippedWeapon = nil
 WeaponController.CanAttack = true
 WeaponController.IsHoldingTrigger = false
 WeaponController.CurrentIdleTrack = nil
-WeaponController.VisibilityConnection = nil
 
 function WeaponController:Start()
-	print("WeaponController Started (Tool Version).")
+	print("WeaponController Started (Cosmetics Enabled).")
 
 	local player = Players.LocalPlayer
 
-	-- Setup tools when character spawns
 	player.CharacterAdded:Connect(function(character)
 		self:SetupCharacter(character)
 	end)
@@ -29,13 +30,11 @@ function WeaponController:Start()
 		self:SetupCharacter(player.Character)
 	end
 
-	-- Listen for Input (Shooting and Swapping)
 	UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then
 			return
 		end
 
-		-- Shooting
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			if not self.EquippedWeapon then
 				return
@@ -44,7 +43,6 @@ function WeaponController:Start()
 			self:HandleAttackInput()
 		end
 
-		-- Swapping weapons using standard Backpack equipping
 		local character = player.Character
 		local humanoid = character and character:FindFirstChild("Humanoid")
 		local backpack = player:FindFirstChild("Backpack")
@@ -56,7 +54,7 @@ function WeaponController:Start()
 					humanoid:EquipTool(tool)
 				end
 			elseif input.KeyCode == Enum.KeyCode.Two then
-				local tool = backpack:FindFirstChild("CombatKnife")
+				local tool = backpack:FindFirstChild("Sword")
 				if tool then
 					humanoid:EquipTool(tool)
 				end
@@ -75,52 +73,40 @@ function WeaponController:SetupCharacter(character)
 	local player = Players.LocalPlayer
 	local backpack = player:WaitForChild("Backpack")
 
-	-- Clear old tools
 	backpack:ClearAllChildren()
 
-	-- Give the player the tools
 	self:GiveTool("AssaultRifle", backpack, character)
-	self:GiveTool("CombatKnife", backpack, character)
+	self:GiveTool("Sword", backpack, character)
 
-	-- Automatically equip the AR to start
 	task.wait(0.1)
 	local humanoid = character:FindFirstChild("Humanoid")
 	local arTool = backpack:FindFirstChild("AssaultRifle")
 	if humanoid and arTool then
 		humanoid:EquipTool(arTool)
 	end
-
-	-- Keep whatever tool is equipped visible in First Person
-	if self.VisibilityConnection then
-		self.VisibilityConnection:Disconnect()
-	end
-
-	self.VisibilityConnection = RunService.RenderStepped:Connect(function()
-		local equippedTool = character:FindFirstChildOfClass("Tool")
-		if equippedTool then
-			for _, part in pairs(equippedTool:GetDescendants()) do
-				if part:IsA("BasePart") or part:IsA("Decal") then
-					part.LocalTransparencyModifier = 0
-				end
-			end
-		end
-	end)
 end
 
 function WeaponController:GiveTool(weaponName, backpack, character)
 	local template = WeaponModels:FindFirstChild(weaponName)
 	if not template or not template:IsA("Tool") then
-		warn("Could not find a Tool named " .. weaponName .. "!")
 		return
 	end
 
 	local newTool = template:Clone()
 
-	-- Listen for native Roblox tool events!
+	-- ==========================================
+	-- MOCK LOADOUT APPLY (Will be moved to Server later)
+	-- ==========================================
+	if weaponName == "AssaultRifle" then
+		-- In the future, the Server will check what the player bought in the store
+		-- and apply these attributes before giving them the tool!
+		newTool:SetAttribute("MuzzleFlash", "StandardFlash")
+		newTool:SetAttribute("Tracer", "StandardTracer")
+	end
+
 	newTool.Equipped:Connect(function()
 		self.EquippedWeapon = weaponName
 		self.IsHoldingTrigger = false
-		print("Equipped: " .. weaponName)
 		self:PlayIdleAnimation(weaponName, character)
 	end)
 
@@ -186,9 +172,124 @@ function WeaponController:HandleAttackInput()
 	end
 end
 
+-- ==========================================
+-- COSMETICS LOGIC
+-- ==========================================
+function WeaponController:RenderShootVisuals(stats, tool, hitPosition)
+	local handle = tool:FindFirstChild("Handle")
+	if not handle then
+		return
+	end
+
+	local muzzle = handle:FindFirstChild("Muzzle")
+	if not muzzle then
+		return
+	end
+
+	local origin = muzzle.WorldPosition
+	local distance = (hitPosition - origin).Magnitude
+
+	-- Read what the individual player has equipped from the Tool's Attributes!
+	local equippedFlash = tool:GetAttribute("MuzzleFlash")
+	local equippedTracer = tool:GetAttribute("Tracer")
+
+	-- 1. Muzzle Flash
+	if equippedFlash then
+		local flashTemplate = Cosmetics.MuzzleFlashes:FindFirstChild(equippedFlash)
+		if flashTemplate then
+			local activeFlash = flashTemplate:Clone()
+			activeFlash.Parent = muzzle
+			activeFlash:Emit(5)
+			Debris:AddItem(activeFlash, 1)
+		end
+	end
+
+	-- 2. Bullet Tracer
+	if equippedTracer then
+		local tracerTemplate = Cosmetics.Tracers:FindFirstChild(equippedTracer)
+		if tracerTemplate then
+			local tracer = tracerTemplate:Clone()
+
+			local tracerLength = math.clamp(distance, 1, 40)
+			tracer.Size = Vector3.new(tracer.Size.X, tracer.Size.Y, tracerLength)
+			tracer.CFrame = CFrame.lookAt(origin, hitPosition) * CFrame.new(0, 0, -tracerLength / 2)
+			tracer.Parent = Workspace
+
+			local flightTime = distance / 1000
+
+			local tweenInfo = TweenInfo.new(flightTime, Enum.EasingStyle.Linear)
+			local goal = {
+				CFrame = CFrame.lookAt(hitPosition, hitPosition + (hitPosition - origin))
+					* CFrame.new(0, 0, -tracerLength / 2),
+				Transparency = 1,
+			}
+
+			local tween = TweenService:Create(tracer, tweenInfo, goal)
+			tween:Play()
+
+			Debris:AddItem(tracer, flightTime + 0.1)
+		end
+	end
+end
+
+-- ==========================================
+-- HIT DETECTION LOGIC
+-- ==========================================
 function WeaponController:PerformAttack(stats)
 	self.CanAttack = false
-	print("Attacking with " .. self.EquippedWeapon .. "!")
+	local player = Players.LocalPlayer
+	local character = player.Character
+
+	if stats.Type == "Ranged" then
+		local camera = Workspace.CurrentCamera
+		local origin = camera.CFrame.Position
+		local direction = camera.CFrame.LookVector * 1000
+
+		local rayParams = RaycastParams.new()
+		rayParams.FilterDescendantsInstances = { character }
+		rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+		local result = Workspace:Raycast(origin, direction, rayParams)
+
+		-- Default hit position to max range if we hit nothing
+		local hitPosition = origin + direction
+		if result then
+			hitPosition = result.Position
+		end
+
+		-- RENDER COSMETICS
+		local tool = character:FindFirstChild(self.EquippedWeapon)
+		if tool then
+			self:RenderShootVisuals(stats, tool, hitPosition)
+		end
+
+		if result then
+			local remote = Shared.Weapons:FindFirstChild("WeaponEvent")
+			if remote then
+				remote:FireServer(self.EquippedWeapon, result.Instance)
+			end
+		end
+	elseif stats.Type == "Melee" then
+		local rootPart = character:FindFirstChild("HumanoidRootPart")
+		if rootPart then
+			local origin = rootPart.Position
+			local direction = rootPart.CFrame.LookVector * stats.Range
+
+			local rayParams = RaycastParams.new()
+			rayParams.FilterDescendantsInstances = { character }
+			rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+			local result = Workspace:Spherecast(origin, 3, direction, rayParams)
+
+			if result then
+				local remote = Shared.Weapons:FindFirstChild("WeaponEvent")
+				if remote then
+					remote:FireServer(self.EquippedWeapon, result.Instance)
+				end
+			end
+		end
+	end
+
 	task.wait(stats.FireRate)
 	self.CanAttack = true
 end

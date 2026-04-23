@@ -6,16 +6,17 @@ local WeaponData = {
 		MaxAmmo = 30,
 		ReloadTime = 2,
 		Automatic = true,
-		IdleAnimation = "rbxassetid://82735357454134", -- Replace with your AR Idle ID
+		IdleAnimation = "rbxassetid://82735357454134",
+		-- Notice: MuzzleFlash and Tracer are GONE from here!
 	},
 
-	CombatKnife = {
+	Sword = {
 		Type = "Melee",
 		BaseDamage = 50,
-		FireRate = 0.6,
-		Range = 5,
+		FireRate = 0.8,
+		Range = 8,
 		Automatic = false,
-		IdleAnimation = "rbxassetid://99710352770917", -- Replace with your Karambit Idle ID
+		IdleAnimation = "rbxassetid://00000000000",
 	},
 }
 

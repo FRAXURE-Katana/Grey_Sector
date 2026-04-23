@@ -1,55 +1,46 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local CameraController = {}
 
-local ARM_PARTS = {
-	["Left Arm"] = true,
-	["Right Arm"] = true,
-	["LeftUpperArm"] = true,
-	["LeftLowerArm"] = true,
-	["LeftHand"] = true,
-	["RightUpperArm"] = true,
-	["RightLowerArm"] = true,
-	["RightHand"] = true,
-}
-
 function CameraController:Start()
-	print("CameraController Started.")
+	print("CameraController Started (Third-Person with Spine Tilt).")
 	local player = Players.LocalPlayer
 
-	player.CameraMode = Enum.CameraMode.LockFirstPerson
+	player.CameraMode = Enum.CameraMode.Classic
+	player.CameraMinZoomDistance = 6
+	player.CameraMaxZoomDistance = 12
 
 	player.CharacterAdded:Connect(function(character)
-		self:SetupCharacter(character)
+		self:SetupThirdPerson(character)
 	end)
 
 	if player.Character then
-		self:SetupCharacter(player.Character)
+		self:SetupThirdPerson(player.Character)
 	end
 end
 
-function CameraController:SetupCharacter(character)
-	RunService.RenderStepped:Connect(function()
-		for _, part in pairs(character:GetChildren()) do
-			if part:IsA("BasePart") and ARM_PARTS[part.Name] then
-				part.LocalTransparencyModifier = 0
-			end
-		end
-	end)
-
+function CameraController:SetupThirdPerson(character)
 	local humanoid = character:WaitForChild("Humanoid")
-	task.wait(0.1)
+	local rootPart = character:WaitForChild("HumanoidRootPart")
 
+	-- Over-the-shoulder offset
+	humanoid.CameraOffset = Vector3.new(2, 2, 0)
+	humanoid.AutoRotate = false
+
+	task.wait(0.1) -- Wait for joints to fully load
+
+	-- Branch logic based on Rig Type
 	if humanoid.RigType == Enum.HumanoidRigType.R15 then
-		self:SetupR15Tilt(character)
+		self:SetupR15(character, humanoid, rootPart)
 	else
-		self:SetupR6Tilt(character)
+		self:SetupR6(character, humanoid, rootPart)
 	end
 end
 
-function CameraController:SetupR15Tilt(character)
+function CameraController:SetupR15(character, humanoid, rootPart)
 	local upperTorso = character:WaitForChild("UpperTorso")
 	local head = character:WaitForChild("Head")
 	local rightUpperArm = character:WaitForChild("RightUpperArm")
@@ -60,50 +51,68 @@ function CameraController:SetupR15Tilt(character)
 	local rightShoulder = rightUpperArm:WaitForChild("RightShoulder")
 	local leftShoulder = leftUpperArm:WaitForChild("LeftShoulder")
 
+	-- Store default resting poses
 	local waistC0 = waist.C0
 	local neckC0 = neck.C0
 	local rsC0 = rightShoulder.C0
 	local lsC0 = leftShoulder.C0
 
-	local camera = Workspace.CurrentCamera
-
 	RunService.RenderStepped:Connect(function()
-		local humanoid = character:FindFirstChild("Humanoid")
-		if not character.PrimaryPart or (humanoid and humanoid.Health <= 0) then
+		if humanoid.Health <= 0 then
 			return
 		end
 
-		-- The math.clamp prevents the NaN error that freezes the joints!
-		local pitch = math.asin(math.clamp(camera.CFrame.LookVector.Y, -1, 1))
+		UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
 
-		-- Bend the torso and head halfway
+		local camera = Workspace.CurrentCamera
+		local lookVector = camera.CFrame.LookVector
+
+		-- 1. HORIZONTAL ROTATION (Turn the whole body left/right)
+		local flatLookVector = Vector3.new(lookVector.X, 0, lookVector.Z)
+		-- Prevent NaN errors if looking perfectly straight up or down
+		if flatLookVector.Magnitude > 0.001 then
+			rootPart.CFrame = CFrame.lookAt(rootPart.Position, rootPart.Position + flatLookVector.Unit)
+		end
+
+		-- 2. VERTICAL ROTATION (Tilt the waist, neck, and arms up/down)
+		local pitch = math.asin(math.clamp(lookVector.Y, -1, 1))
+
 		waist.C0 = waistC0 * CFrame.Angles(pitch * 0.5, 0, 0)
 		neck.C0 = neckC0 * CFrame.Angles(pitch * 0.5, 0, 0)
 
-		-- Bend the arms the rest of the way so the gun perfectly aligns with the camera!
 		rightShoulder.C0 = rsC0 * CFrame.Angles(pitch * 0.5, 0, 0)
 		leftShoulder.C0 = lsC0 * CFrame.Angles(pitch * 0.5, 0, 0)
 	end)
 end
 
-function CameraController:SetupR6Tilt(character)
+function CameraController:SetupR6(character, humanoid, rootPart)
 	local torso = character:WaitForChild("Torso")
 	local rightShoulder = torso:WaitForChild("Right Shoulder")
 	local leftShoulder = torso:WaitForChild("Left Shoulder")
 
 	local rsC0 = rightShoulder.C0
 	local lsC0 = leftShoulder.C0
-	local camera = Workspace.CurrentCamera
 
 	RunService.RenderStepped:Connect(function()
-		local humanoid = character:FindFirstChild("Humanoid")
-		if not character.PrimaryPart or (humanoid and humanoid.Health <= 0) then
+		if humanoid.Health <= 0 then
 			return
 		end
 
-		local pitch = math.asin(math.clamp(camera.CFrame.LookVector.Y, -1, 1))
+		UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
 
-		-- R6 shoulders have a native 90-degree rotation, so we rotate on the Z axis here
+		local camera = Workspace.CurrentCamera
+		local lookVector = camera.CFrame.LookVector
+
+		-- 1. HORIZONTAL ROTATION
+		local flatLookVector = Vector3.new(lookVector.X, 0, lookVector.Z)
+		if flatLookVector.Magnitude > 0.001 then
+			rootPart.CFrame = CFrame.lookAt(rootPart.Position, rootPart.Position + flatLookVector.Unit)
+		end
+
+		-- 2. VERTICAL ROTATION
+		local pitch = math.asin(math.clamp(lookVector.Y, -1, 1))
+
+		-- R6 shoulders rotate on the Z axis natively
 		rightShoulder.C0 = rsC0 * CFrame.Angles(0, 0, pitch)
 		leftShoulder.C0 = lsC0 * CFrame.Angles(0, 0, -pitch)
 	end)
