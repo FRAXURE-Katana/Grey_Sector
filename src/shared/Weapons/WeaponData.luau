@@ -9,9 +9,9 @@ local WeaponData = {
 		Automatic = true,
 		IdleAnimation = "rbxassetid://82735357454134",
 		ReloadAnimation = "rbxassetid://135233323910967",
-		-- NEW: Sound IDs
-		ShootSound = "rbxassetid://123304996879837", -- Replace with Gunshot ID
-		ReloadSound = "rbxassetid://105895546453287", -- Replace with Reload ID
+		ShootAnimation = "rbxassetid://96858727197533", -- Replace with your Firing Animation ID
+		ShootSound = "rbxassetid://123304996879837",
+		ReloadSound = "rbxassetid://105895546453287",
 	},
 
 	Sword = {
@@ -21,7 +21,8 @@ local WeaponData = {
 		Range = 8,
 		Automatic = false,
 		IdleAnimation = "rbxassetid://122555311336821",
-		SwingSound = "rbxassetid://140496995751307", -- Replace with Sword Slash ID
+		AttackAnimation = "rbxassetid://00000000000", -- Replace with your Sword Slash Animation ID
+		SwingSound = "rbxassetid://140496995751307",
 	},
 }
 

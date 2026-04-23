@@ -184,13 +184,17 @@ end
 -- ==========================================
 -- AUDIO HELPER LOGIC
 -- ==========================================
-function WeaponController:PlaySound(soundId, parentPart)
+function WeaponController:PlaySound(soundId, parentPart, pitch)
 	if not soundId or soundId == "rbxassetid://00000000000" or not parentPart then
 		return
 	end
 
 	local sound = Instance.new("Sound")
 	sound.SoundId = soundId
+
+	-- If a pitch is provided, apply it. Otherwise, default to 1.
+	sound.PlaybackSpeed = pitch or 1
+
 	sound.Parent = parentPart
 	sound:Play()
 
@@ -347,8 +351,20 @@ function WeaponController:PerformAttack(stats)
 
 		tool:SetAttribute("CurrentAmmo", currentAmmo - 1)
 
-		-- PLAY SHOOT AUDIO
-		self:PlaySound(stats.ShootSound, tool:FindFirstChild("Handle"))
+		-- AUDIO: Generate a random pitch between 0.9 and 1.1
+		local randomPitch = math.random(90, 110) / 100
+		self:PlaySound(stats.ShootSound, tool:FindFirstChild("Handle"), randomPitch)
+
+		-- ANIMATION: Play the shooting animation
+		local humanoid = character:FindFirstChild("Humanoid")
+		local animator = humanoid and humanoid:FindFirstChild("Animator")
+		if animator and stats.ShootAnimation and stats.ShootAnimation ~= "rbxassetid://00000000000" then
+			local animation = Instance.new("Animation")
+			animation.AnimationId = stats.ShootAnimation
+			local track = animator:LoadAnimation(animation)
+			track.Priority = Enum.AnimationPriority.Action3 -- High priority so it overrides Idle
+			track:Play()
+		end
 
 		local camera = Workspace.CurrentCamera
 		local origin = camera.CFrame.Position
@@ -378,8 +394,20 @@ function WeaponController:PerformAttack(stats)
 			return
 		end
 
-		-- PLAY SWORD AUDIO
-		self:PlaySound(stats.SwingSound, tool:FindFirstChild("Handle"))
+		-- AUDIO: Generate a random pitch for sword swings too!
+		local randomPitch = math.random(90, 110) / 100
+		self:PlaySound(stats.SwingSound, tool:FindFirstChild("Handle"), randomPitch)
+
+		-- ANIMATION: Play the sword swing animation
+		local humanoid = character:FindFirstChild("Humanoid")
+		local animator = humanoid and humanoid:FindFirstChild("Animator")
+		if animator and stats.AttackAnimation and stats.AttackAnimation ~= "rbxassetid://00000000000" then
+			local animation = Instance.new("Animation")
+			animation.AnimationId = stats.AttackAnimation
+			local track = animator:LoadAnimation(animation)
+			track.Priority = Enum.AnimationPriority.Action3
+			track:Play()
+		end
 
 		local rootPart = character:FindFirstChild("HumanoidRootPart")
 		if rootPart then
