@@ -15,15 +15,19 @@ WeaponController.EquippedWeapon = nil
 WeaponController.CanAttack = true
 WeaponController.IsHoldingTrigger = false
 WeaponController.IsReloading = false
+
 WeaponController.CurrentIdleTrack = nil
 WeaponController.CurrentReloadTrack = nil
+-- NEW: Movement Tracking Variables
+WeaponController.CurrentRunTrack = nil
+WeaponController.MovementConnection = nil
+WeaponController.IsMoving = false
 
--- NEW: Combo Tracking Variables
 WeaponController.CurrentComboIndex = 1
 WeaponController.LastAttackTime = 0
 
 function WeaponController:Start()
-	print("WeaponController Started (Combo System Enabled).")
+	print("WeaponController Started (Run Animations Enabled).")
 
 	local player = Players.LocalPlayer
 
@@ -108,8 +112,6 @@ function WeaponController:HookToolEvents(tool, character)
 	tool.Equipped:Connect(function()
 		self.EquippedWeapon = weaponName
 		self.IsHoldingTrigger = false
-
-		-- Reset combo when pulling out the weapon
 		self.CurrentComboIndex = 1
 
 		if tool:GetAttribute("CurrentAmmo") then
@@ -122,7 +124,38 @@ function WeaponController:HookToolEvents(tool, character)
 			)
 		end
 
-		self:PlayIdleAnimation(weaponName, character)
+		-- NEW: Movement Tracking Logic
+		local humanoid = character:FindFirstChild("Humanoid")
+		if humanoid then
+			local stats = WeaponData[weaponName]
+			local hasRunAnim = stats and stats.RunAnimation and stats.RunAnimation ~= "rbxassetid://00000000000"
+
+			-- Check initial movement state
+			self.IsMoving = humanoid.MoveDirection.Magnitude > 0
+
+			if self.IsMoving and hasRunAnim then
+				self:PlayRunAnimation(weaponName, character)
+			else
+				self:PlayIdleAnimation(weaponName, character)
+			end
+
+			-- Listen for starting/stopping
+			self.MovementConnection = humanoid.Running:Connect(function(speed)
+				if hasRunAnim then
+					local isMovingNow = speed > 0.1
+					if isMovingNow ~= self.IsMoving then
+						self.IsMoving = isMovingNow
+						if self.IsMoving then
+							self:StopIdleAnimation()
+							self:PlayRunAnimation(weaponName, character)
+						else
+							self:StopRunAnimation()
+							self:PlayIdleAnimation(weaponName, character)
+						end
+					end
+				end
+			end)
+		end
 	end)
 
 	tool.Unequipped:Connect(function()
@@ -131,10 +164,21 @@ function WeaponController:HookToolEvents(tool, character)
 			self.IsHoldingTrigger = false
 			self.IsReloading = false
 		end
+
+		-- Disconnect movement tracker when unequipped
+		if self.MovementConnection then
+			self.MovementConnection:Disconnect()
+			self.MovementConnection = nil
+		end
+
 		self:StopIdleAnimation()
+		self:StopRunAnimation()
 	end)
 end
 
+-- ==========================================
+-- ANIMATION HELPERS
+-- ==========================================
 function WeaponController:PlayIdleAnimation(weaponName, character)
 	local humanoid = character:FindFirstChild("Humanoid")
 	if not humanoid then
@@ -171,6 +215,46 @@ function WeaponController:StopIdleAnimation()
 	end
 end
 
+function WeaponController:PlayRunAnimation(weaponName, character)
+	local humanoid = character:FindFirstChild("Humanoid")
+	if not humanoid then
+		return
+	end
+
+	local animator = humanoid:FindFirstChild("Animator")
+	if not animator then
+		animator = Instance.new("Animator")
+		animator.Parent = humanoid
+	end
+
+	self:StopRunAnimation()
+
+	local stats = WeaponData[weaponName]
+	local animId = stats and stats.RunAnimation
+
+	if animId and animId ~= "rbxassetid://00000000000" then
+		local animation = Instance.new("Animation")
+		animation.AnimationId = animId
+
+		self.CurrentRunTrack = animator:LoadAnimation(animation)
+		self.CurrentRunTrack.Looped = true
+		-- Priority is set to Action so it properly overrides the default Roblox run animation
+		self.CurrentRunTrack.Priority = Enum.AnimationPriority.Action
+		self.CurrentRunTrack:Play()
+	end
+end
+
+function WeaponController:StopRunAnimation()
+	if self.CurrentRunTrack then
+		self.CurrentRunTrack:Stop()
+		self.CurrentRunTrack:Destroy()
+		self.CurrentRunTrack = nil
+	end
+end
+
+-- ==========================================
+-- ATTACK LOGIC
+-- ==========================================
 function WeaponController:HandleAttackInput()
 	local stats = WeaponData[self.EquippedWeapon]
 	if not stats or self.IsReloading then
@@ -188,9 +272,6 @@ function WeaponController:HandleAttackInput()
 	end
 end
 
--- ==========================================
--- AUDIO HELPER LOGIC
--- ==========================================
 function WeaponController:PlaySound(soundId, parentPart, pitch)
 	if not soundId or soundId == "rbxassetid://00000000000" or not parentPart then
 		return
@@ -205,9 +286,6 @@ function WeaponController:PlaySound(soundId, parentPart, pitch)
 	Debris:AddItem(sound, 3)
 end
 
--- ==========================================
--- RELOADING LOGIC
--- ==========================================
 function WeaponController:ReloadWeapon()
 	if not self.EquippedWeapon or self.IsReloading then
 		return
@@ -271,9 +349,6 @@ function WeaponController:ReloadWeapon()
 	self.IsReloading = false
 end
 
--- ==========================================
--- COSMETICS LOGIC
--- ==========================================
 function WeaponController:RenderShootVisuals(stats, tool, hitPosition)
 	local handle = tool:FindFirstChild("Handle")
 	if not handle then
@@ -328,9 +403,6 @@ function WeaponController:RenderShootVisuals(stats, tool, hitPosition)
 	end
 end
 
--- ==========================================
--- HIT DETECTION LOGIC
--- ==========================================
 function WeaponController:PerformAttack(stats)
 	self.CanAttack = false
 	local player = Players.LocalPlayer
@@ -397,18 +469,15 @@ function WeaponController:PerformAttack(stats)
 		local randomPitch = math.random(90, 110) / 100
 		self:PlaySound(stats.SwingSound, tool:FindFirstChild("Handle"), randomPitch)
 
-		-- NEW: Combo System Logic
 		local humanoid = character:FindFirstChild("Humanoid")
 		local animator = humanoid and humanoid:FindFirstChild("Animator")
 
-		-- Reset combo if it's been more than 1.5 seconds since the last swing
 		if os.clock() - self.LastAttackTime > 1.5 then
 			self.CurrentComboIndex = 1
 		end
 		self.LastAttackTime = os.clock()
 
 		if animator and stats.AttackAnimations and #stats.AttackAnimations > 0 then
-			-- Ensure the index loops back around if it goes out of bounds
 			if self.CurrentComboIndex > #stats.AttackAnimations then
 				self.CurrentComboIndex = 1
 			end
@@ -422,7 +491,6 @@ function WeaponController:PerformAttack(stats)
 				track:Play()
 			end
 
-			-- Prepare the next animation for the next click
 			self.CurrentComboIndex += 1
 		end
 
