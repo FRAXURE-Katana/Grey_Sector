@@ -110,6 +110,12 @@ function WeaponController:HookToolEvents(tool, character)
 	local weaponName = tool.Name
 
 	tool.Equipped:Connect(function()
+		-- NEW: Safeguard to kill any lingering movement connections from a previous weapon swap
+		if self.MovementConnection then
+			self.MovementConnection:Disconnect()
+			self.MovementConnection = nil
+		end
+
 		self.EquippedWeapon = weaponName
 		self.IsHoldingTrigger = false
 		self.CurrentComboIndex = 1
@@ -124,7 +130,7 @@ function WeaponController:HookToolEvents(tool, character)
 			)
 		end
 
-		-- NEW: Movement Tracking Logic
+		-- Movement Tracking Logic
 		local humanoid = character:FindFirstChild("Humanoid")
 		if humanoid then
 			local stats = WeaponData[weaponName]
@@ -159,20 +165,21 @@ function WeaponController:HookToolEvents(tool, character)
 	end)
 
 	tool.Unequipped:Connect(function()
+		-- We only want to clean up if this tool is STILL the officially equipped weapon
 		if self.EquippedWeapon == weaponName then
 			self.EquippedWeapon = nil
 			self.IsHoldingTrigger = false
 			self.IsReloading = false
-		end
 
-		-- Disconnect movement tracker when unequipped
-		if self.MovementConnection then
-			self.MovementConnection:Disconnect()
-			self.MovementConnection = nil
-		end
+			-- MOVED: These are now safely inside the if-statement!
+			if self.MovementConnection then
+				self.MovementConnection:Disconnect()
+				self.MovementConnection = nil
+			end
 
-		self:StopIdleAnimation()
-		self:StopRunAnimation()
+			self:StopIdleAnimation()
+			self:StopRunAnimation()
+		end
 	end)
 end
 
