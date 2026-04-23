@@ -11,31 +11,31 @@ local WeaponModels = ReplicatedStorage:WaitForChild("Models"):WaitForChild("Weap
 local WeaponController = {}
 
 WeaponController.EquippedWeapon = nil
-WeaponController.CurrentWeaponModel = nil
 WeaponController.CanAttack = true
 WeaponController.IsHoldingTrigger = false
+WeaponController.CurrentIdleTrack = nil
 WeaponController.VisibilityConnection = nil
 
--- NEW: Variable to track the currently playing animation
-WeaponController.CurrentIdleTrack = nil
-
 function WeaponController:Start()
-	print("WeaponController Started.")
+	print("WeaponController Started (Tool Version).")
 
 	local player = Players.LocalPlayer
+
+	-- Setup tools when character spawns
 	player.CharacterAdded:Connect(function(character)
-		task.wait(0.1)
-		self:EquipWeapon("AssaultRifle")
+		self:SetupCharacter(character)
 	end)
 	if player.Character then
-		self:EquipWeapon("AssaultRifle")
+		self:SetupCharacter(player.Character)
 	end
 
+	-- Listen for Input (Shooting and Swapping)
 	UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then
 			return
 		end
 
+		-- Shooting
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			if not self.EquippedWeapon then
 				return
@@ -44,10 +44,23 @@ function WeaponController:Start()
 			self:HandleAttackInput()
 		end
 
-		if input.KeyCode == Enum.KeyCode.One then
-			self:EquipWeapon("AssaultRifle")
-		elseif input.KeyCode == Enum.KeyCode.Two then
-			self:EquipWeapon("CombatKnife")
+		-- Swapping weapons using standard Backpack equipping
+		local character = player.Character
+		local humanoid = character and character:FindFirstChild("Humanoid")
+		local backpack = player:FindFirstChild("Backpack")
+
+		if humanoid and backpack then
+			if input.KeyCode == Enum.KeyCode.One then
+				local tool = backpack:FindFirstChild("AssaultRifle")
+				if tool then
+					humanoid:EquipTool(tool)
+				end
+			elseif input.KeyCode == Enum.KeyCode.Two then
+				local tool = backpack:FindFirstChild("CombatKnife")
+				if tool then
+					humanoid:EquipTool(tool)
+				end
+			end
 		end
 	end)
 
@@ -58,49 +71,84 @@ function WeaponController:Start()
 	end)
 end
 
-function WeaponController:EquipWeapon(weaponName)
-	if self.EquippedWeapon == weaponName or not WeaponData[weaponName] then
-		return
+function WeaponController:SetupCharacter(character)
+	local player = Players.LocalPlayer
+	local backpack = player:WaitForChild("Backpack")
+
+	-- Clear old tools
+	backpack:ClearAllChildren()
+
+	-- Give the player the tools
+	self:GiveTool("AssaultRifle", backpack, character)
+	self:GiveTool("CombatKnife", backpack, character)
+
+	-- Automatically equip the AR to start
+	task.wait(0.1)
+	local humanoid = character:FindFirstChild("Humanoid")
+	local arTool = backpack:FindFirstChild("AssaultRifle")
+	if humanoid and arTool then
+		humanoid:EquipTool(arTool)
 	end
 
-	self.EquippedWeapon = weaponName
-	self.IsHoldingTrigger = false
-	print("Swapped to: " .. weaponName)
+	-- Keep whatever tool is equipped visible in First Person
+	if self.VisibilityConnection then
+		self.VisibilityConnection:Disconnect()
+	end
 
-	self:WeldWeaponToCharacter(weaponName)
-
-	-- NEW: Play the idle animation after welding
-	self:PlayIdleAnimation(weaponName)
+	self.VisibilityConnection = RunService.RenderStepped:Connect(function()
+		local equippedTool = character:FindFirstChildOfClass("Tool")
+		if equippedTool then
+			for _, part in pairs(equippedTool:GetDescendants()) do
+				if part:IsA("BasePart") or part:IsA("Decal") then
+					part.LocalTransparencyModifier = 0
+				end
+			end
+		end
+	end)
 end
 
--- NEW: Function to handle animation playing
-function WeaponController:PlayIdleAnimation(weaponName)
-	local player = Players.LocalPlayer
-	local character = player.Character
-	if not character then
+function WeaponController:GiveTool(weaponName, backpack, character)
+	local template = WeaponModels:FindFirstChild(weaponName)
+	if not template or not template:IsA("Tool") then
+		warn("Could not find a Tool named " .. weaponName .. "!")
 		return
 	end
 
+	local newTool = template:Clone()
+
+	-- Listen for native Roblox tool events!
+	newTool.Equipped:Connect(function()
+		self.EquippedWeapon = weaponName
+		self.IsHoldingTrigger = false
+		print("Equipped: " .. weaponName)
+		self:PlayIdleAnimation(weaponName, character)
+	end)
+
+	newTool.Unequipped:Connect(function()
+		if self.EquippedWeapon == weaponName then
+			self.EquippedWeapon = nil
+			self.IsHoldingTrigger = false
+		end
+		self:StopIdleAnimation()
+	end)
+
+	newTool.Parent = backpack
+end
+
+function WeaponController:PlayIdleAnimation(weaponName, character)
 	local humanoid = character:FindFirstChild("Humanoid")
 	if not humanoid then
 		return
 	end
 
-	-- Get or create the Animator
 	local animator = humanoid:FindFirstChild("Animator")
 	if not animator then
 		animator = Instance.new("Animator")
 		animator.Parent = humanoid
 	end
 
-	-- Stop the old animation if one is playing
-	if self.CurrentIdleTrack then
-		self.CurrentIdleTrack:Stop()
-		self.CurrentIdleTrack:Destroy()
-		self.CurrentIdleTrack = nil
-	end
+	self:StopIdleAnimation()
 
-	-- Load and play the new animation
 	local animId = WeaponData[weaponName].IdleAnimation
 	if animId and animId ~= "rbxassetid://00000000000" then
 		local animation = Instance.new("Animation")
@@ -108,106 +156,27 @@ function WeaponController:PlayIdleAnimation(weaponName)
 
 		self.CurrentIdleTrack = animator:LoadAnimation(animation)
 		self.CurrentIdleTrack.Looped = true
-		-- Set priority to Action so it overrides the default Roblox standing pose
 		self.CurrentIdleTrack.Priority = Enum.AnimationPriority.Action
 		self.CurrentIdleTrack:Play()
 	end
 end
 
-function WeaponController:WeldWeaponToCharacter(weaponName)
-	local player = Players.LocalPlayer
-	local character = player.Character
-	if not character then
-		return
-	end
-
-	local rightArm = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")
-	if not rightArm then
-		return
-	end
-
-	if self.CurrentWeaponModel then
-		self.CurrentWeaponModel:Destroy()
-	end
-
-	local template = WeaponModels:FindFirstChild(weaponName)
-	if template then
-		local newWeapon = template:Clone()
-
-		local handle = newWeapon.PrimaryPart or newWeapon:FindFirstChild("Handle")
-		if not handle then
-			warn(weaponName .. " does not have a PrimaryPart or a part named 'Handle'!")
-			newWeapon:Destroy()
-			return
-		end
-
-		newWeapon.PrimaryPart = handle
-
-		for _, part in pairs(newWeapon:GetDescendants()) do
-			if part:IsA("BasePart") then
-				part.CanCollide = false
-				part.Anchored = false
-				part.Massless = true
-
-				for _, child in pairs(part:GetChildren()) do
-					if child:IsA("Weld") or child:IsA("Motor6D") or child:IsA("WeldConstraint") then
-						child:Destroy()
-					end
-				end
-			end
-		end
-
-		-- GRIP OFFSET CALCULATION
-		local gripPoint = handle:FindFirstChild("GripPoint")
-		local offset = CFrame.new() -- Default to no offset
-
-		if gripPoint then
-			-- If the attachment exists, calculate the inverse offset.
-			-- This aligns the GripPoint's position/rotation directly with the arm.
-			offset = gripPoint.CFrame:Inverse()
-		end
-
-		-- Move the weapon using the offset BEFORE welding
-		newWeapon:PivotTo(rightArm.CFrame * offset)
-
-		for _, part in pairs(newWeapon:GetDescendants()) do
-			if part:IsA("BasePart") and part ~= handle then
-				local internalWeld = Instance.new("WeldConstraint")
-				internalWeld.Part0 = handle
-				internalWeld.Part1 = part
-				internalWeld.Parent = handle
-			end
-		end
-
-		newWeapon.Parent = character
-		self.CurrentWeaponModel = newWeapon
-
-		local armWeld = Instance.new("WeldConstraint")
-		armWeld.Part0 = rightArm
-		armWeld.Part1 = handle
-		armWeld.Parent = handle
-
-		if self.VisibilityConnection then
-			self.VisibilityConnection:Disconnect()
-		end
-
-		self.VisibilityConnection = RunService.RenderStepped:Connect(function()
-			if self.CurrentWeaponModel then
-				for _, part in pairs(self.CurrentWeaponModel:GetDescendants()) do
-					if part:IsA("BasePart") or part:IsA("Decal") then
-						part.LocalTransparencyModifier = 0
-					end
-				end
-			end
-		end)
+function WeaponController:StopIdleAnimation()
+	if self.CurrentIdleTrack then
+		self.CurrentIdleTrack:Stop()
+		self.CurrentIdleTrack:Destroy()
+		self.CurrentIdleTrack = nil
 	end
 end
 
 function WeaponController:HandleAttackInput()
 	local stats = WeaponData[self.EquippedWeapon]
+	if not stats then
+		return
+	end
 
 	if stats.Automatic then
-		while self.IsHoldingTrigger and self.CanAttack do
+		while self.IsHoldingTrigger and self.CanAttack and self.EquippedWeapon do
 			self:PerformAttack(stats)
 		end
 	else
@@ -220,7 +189,6 @@ end
 function WeaponController:PerformAttack(stats)
 	self.CanAttack = false
 	print("Attacking with " .. self.EquippedWeapon .. "!")
-
 	task.wait(stats.FireRate)
 	self.CanAttack = true
 end

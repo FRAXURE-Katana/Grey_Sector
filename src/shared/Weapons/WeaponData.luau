@@ -6,7 +6,7 @@ local WeaponData = {
 		MaxAmmo = 30,
 		ReloadTime = 2,
 		Automatic = true,
-		IdleAnimation = "rbxassetid://99710352770917", -- Replace with your AR Idle ID
+		IdleAnimation = "rbxassetid://82735357454134", -- Replace with your AR Idle ID
 	},
 
 	CombatKnife = {
