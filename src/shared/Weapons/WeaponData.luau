@@ -20,11 +20,11 @@ local WeaponData = {
 		FireRate = 0.8,
 		Range = 8,
 		Automatic = false,
-		IdleAnimation = "rbxassetid://122555311336821",
+		IdleAnimation = "rbxassetid://119340501302594",
 		SwingSound = "rbxassetid://140496995751307",
 		AttackAnimations = {
-			"rbxassetid://131781170053444", -- Replace with Slash 1 ID
-			"rbxassetid://104201765250593", -- Replace with Slash 2 ID
+			"rbxassetid://117598264340206", -- Replace with Slash 1 ID
+			"rbxassetid://124053686608236", -- Replace with Slash 2 ID
 		},
 	},
 }
