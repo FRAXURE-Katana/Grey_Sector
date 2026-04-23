@@ -352,7 +352,7 @@ function WeaponController:PerformAttack(stats)
 		tool:SetAttribute("CurrentAmmo", currentAmmo - 1)
 
 		-- AUDIO: Generate a random pitch between 0.9 and 1.1
-		local randomPitch = math.random(90, 110) / 100
+		local randomPitch = math.random(95, 105) / 100
 		self:PlaySound(stats.ShootSound, tool:FindFirstChild("Handle"), randomPitch)
 
 		-- ANIMATION: Play the shooting animation
