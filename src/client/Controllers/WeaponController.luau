@@ -14,12 +14,12 @@ local WeaponController = {}
 WeaponController.EquippedWeapon = nil
 WeaponController.CanAttack = true
 WeaponController.IsHoldingTrigger = false
-WeaponController.IsReloading = false -- NEW: Track reload state
+WeaponController.IsReloading = false
 WeaponController.CurrentIdleTrack = nil
-WeaponController.CurrentReloadTrack = nil -- NEW: Track reload animation
+WeaponController.CurrentReloadTrack = nil
 
 function WeaponController:Start()
-	print("WeaponController Started (Ammo & Reloading Enabled).")
+	print("WeaponController Started (Audio Enabled).")
 
 	local player = Players.LocalPlayer
 
@@ -43,7 +43,6 @@ function WeaponController:Start()
 			self:HandleAttackInput()
 		end
 
-		-- NEW: Reload Input
 		if input.KeyCode == Enum.KeyCode.R then
 			self:ReloadWeapon()
 		end
@@ -106,7 +105,6 @@ function WeaponController:HookToolEvents(tool, character)
 		self.EquippedWeapon = weaponName
 		self.IsHoldingTrigger = false
 
-		-- Print ammo when equipping
 		if tool:GetAttribute("CurrentAmmo") then
 			print(
 				weaponName
@@ -124,7 +122,7 @@ function WeaponController:HookToolEvents(tool, character)
 		if self.EquippedWeapon == weaponName then
 			self.EquippedWeapon = nil
 			self.IsHoldingTrigger = false
-			self.IsReloading = false -- Cancel reloading if unequipped
+			self.IsReloading = false
 		end
 		self:StopIdleAnimation()
 	end)
@@ -184,6 +182,23 @@ function WeaponController:HandleAttackInput()
 end
 
 -- ==========================================
+-- AUDIO HELPER LOGIC
+-- ==========================================
+function WeaponController:PlaySound(soundId, parentPart)
+	if not soundId or soundId == "rbxassetid://00000000000" or not parentPart then
+		return
+	end
+
+	local sound = Instance.new("Sound")
+	sound.SoundId = soundId
+	sound.Parent = parentPart
+	sound:Play()
+
+	-- Delete the sound object automatically after a few seconds so memory doesn't leak
+	Debris:AddItem(sound, 3)
+end
+
+-- ==========================================
 -- RELOADING LOGIC
 -- ==========================================
 function WeaponController:ReloadWeapon()
@@ -214,7 +229,9 @@ function WeaponController:ReloadWeapon()
 	self.IsHoldingTrigger = false
 	print("Reloading " .. self.EquippedWeapon .. "...")
 
-	-- Play Reload Animation (If you add one later)
+	-- PLAY RELOAD AUDIO
+	self:PlaySound(stats.ReloadSound, tool:FindFirstChild("Handle"))
+
 	local humanoid = player.Character:FindFirstChild("Humanoid")
 	local animator = humanoid and humanoid:FindFirstChild("Animator")
 	if animator and stats.ReloadAnimation and stats.ReloadAnimation ~= "rbxassetid://00000000000" then
@@ -227,7 +244,6 @@ function WeaponController:ReloadWeapon()
 
 	task.wait(stats.ReloadTime)
 
-	-- Make sure we are still holding the same gun after the wait time!
 	if self.EquippedWeapon == tool.Name then
 		local ammoNeeded = stats.MaxAmmo - currentAmmo
 		local ammoToTake = math.min(ammoNeeded, reserveAmmo)
@@ -320,19 +336,19 @@ function WeaponController:PerformAttack(stats)
 			return
 		end
 
-		-- CHECK AND DRAIN AMMO
 		local currentAmmo = tool:GetAttribute("CurrentAmmo")
 		if currentAmmo <= 0 then
 			print("Click! Out of Ammo.")
 			self.CanAttack = true
 			self.IsHoldingTrigger = false
-			self:ReloadWeapon() -- Auto-reload attempt
+			self:ReloadWeapon()
 			return
 		end
 
 		tool:SetAttribute("CurrentAmmo", currentAmmo - 1)
-		-- Print ammo after every shot for testing
-		print("Ammo: " .. (currentAmmo - 1) .. " / " .. tool:GetAttribute("ReserveAmmo"))
+
+		-- PLAY SHOOT AUDIO
+		self:PlaySound(stats.ShootSound, tool:FindFirstChild("Handle"))
 
 		local camera = Workspace.CurrentCamera
 		local origin = camera.CFrame.Position
@@ -358,6 +374,13 @@ function WeaponController:PerformAttack(stats)
 			end
 		end
 	elseif stats.Type == "Melee" then
+		if not tool then
+			return
+		end
+
+		-- PLAY SWORD AUDIO
+		self:PlaySound(stats.SwingSound, tool:FindFirstChild("Handle"))
+
 		local rootPart = character:FindFirstChild("HumanoidRootPart")
 		if rootPart then
 			local origin = rootPart.Position
