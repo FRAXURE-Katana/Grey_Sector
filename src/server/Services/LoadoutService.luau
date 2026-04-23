@@ -1,21 +1,20 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local WeaponData = require(Shared.Weapons.WeaponData)
+
 local WeaponModels = ReplicatedStorage:WaitForChild("Models"):WaitForChild("Weapons")
 
 local LoadoutService = {}
 
--- MOCK DATABASE: This represents what a player has equipped from the store.
 LoadoutService.PlayerLoadouts = {
 	Default = {
 		AssaultRifle = {
 			MuzzleFlash = "StandardFlash",
 			Tracer = "StandardTracer",
-			-- Skin = "GoldCamo" (You can add anything here later!)
 		},
-		Sword = {
-			-- Empty for now, but ready for Sword Trails or custom sounds!
-		},
+		Sword = {},
 	},
 }
 
@@ -31,18 +30,13 @@ end
 
 function LoadoutService:GiveLoadout(player, character)
 	local backpack = player:WaitForChild("Backpack")
-
-	-- In the future, you will load their actual saved data here.
 	local myLoadout = self.PlayerLoadouts.Default
 
-	-- Clear out any default Roblox gear just in case
 	backpack:ClearAllChildren()
 
-	-- Give the designated loadout
 	if myLoadout.AssaultRifle then
 		self:GiveWeapon("AssaultRifle", myLoadout.AssaultRifle, backpack)
 	end
-
 	if myLoadout.Sword then
 		self:GiveWeapon("Sword", myLoadout.Sword, backpack)
 	end
@@ -56,10 +50,16 @@ function LoadoutService:GiveWeapon(weaponName, cosmeticData, backpack)
 
 	local newWeapon = template:Clone()
 
-	-- MAGIC LOOP: This dynamically applies EVERY cosmetic listed in the loadout
-	-- directly to the Tool as an Attribute!
+	-- Apply Cosmetics
 	for attributeName, attributeValue in pairs(cosmeticData) do
 		newWeapon:SetAttribute(attributeName, attributeValue)
+	end
+
+	-- INITIALIZE AMMO: Look up the stats and set the starting ammo!
+	local stats = WeaponData[weaponName]
+	if stats and stats.Type == "Ranged" then
+		newWeapon:SetAttribute("CurrentAmmo", stats.MaxAmmo)
+		newWeapon:SetAttribute("ReserveAmmo", stats.MaxReserve)
 	end
 
 	newWeapon.Parent = backpack

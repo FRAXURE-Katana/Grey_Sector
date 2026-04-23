@@ -7,8 +7,6 @@ local Debris = game:GetService("Debris")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local WeaponData = require(Shared.Weapons.WeaponData)
-
--- We no longer need WeaponModels here since the Server gives us the tools!
 local Cosmetics = ReplicatedStorage:WaitForChild("Cosmetics")
 
 local WeaponController = {}
@@ -16,10 +14,12 @@ local WeaponController = {}
 WeaponController.EquippedWeapon = nil
 WeaponController.CanAttack = true
 WeaponController.IsHoldingTrigger = false
+WeaponController.IsReloading = false -- NEW: Track reload state
 WeaponController.CurrentIdleTrack = nil
+WeaponController.CurrentReloadTrack = nil -- NEW: Track reload animation
 
 function WeaponController:Start()
-	print("WeaponController Started (Server Loadout Enabled).")
+	print("WeaponController Started (Ammo & Reloading Enabled).")
 
 	local player = Players.LocalPlayer
 
@@ -35,7 +35,6 @@ function WeaponController:Start()
 			return
 		end
 
-		-- Shooting Input
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			if not self.EquippedWeapon then
 				return
@@ -44,12 +43,16 @@ function WeaponController:Start()
 			self:HandleAttackInput()
 		end
 
-		-- Swapping Input
+		-- NEW: Reload Input
+		if input.KeyCode == Enum.KeyCode.R then
+			self:ReloadWeapon()
+		end
+
 		local character = player.Character
 		local humanoid = character and character:FindFirstChild("Humanoid")
 		local backpack = player:FindFirstChild("Backpack")
 
-		if humanoid and backpack then
+		if humanoid and backpack and not self.IsReloading then
 			if input.KeyCode == Enum.KeyCode.One then
 				local tool = backpack:FindFirstChild("AssaultRifle")
 				if tool then
@@ -75,21 +78,18 @@ function WeaponController:SetupCharacter(character)
 	local player = Players.LocalPlayer
 	local backpack = player:WaitForChild("Backpack")
 
-	-- Listen for the Server dropping tools into our backpack
 	backpack.ChildAdded:Connect(function(child)
 		if child:IsA("Tool") then
 			self:HookToolEvents(child, character)
 		end
 	end)
 
-	-- Hook any tools that might already be there if the client loaded slowly
 	for _, child in pairs(backpack:GetChildren()) do
 		if child:IsA("Tool") then
 			self:HookToolEvents(child, character)
 		end
 	end
 
-	-- Give the server a brief moment to drop the tools in, then force-equip the AR
 	task.delay(0.5, function()
 		local humanoid = character:FindFirstChild("Humanoid")
 		local arTool = backpack:FindFirstChild("AssaultRifle")
@@ -105,7 +105,18 @@ function WeaponController:HookToolEvents(tool, character)
 	tool.Equipped:Connect(function()
 		self.EquippedWeapon = weaponName
 		self.IsHoldingTrigger = false
-		print("Equipped: " .. weaponName)
+
+		-- Print ammo when equipping
+		if tool:GetAttribute("CurrentAmmo") then
+			print(
+				weaponName
+					.. " Equipped. Ammo: "
+					.. tool:GetAttribute("CurrentAmmo")
+					.. " / "
+					.. tool:GetAttribute("ReserveAmmo")
+			)
+		end
+
 		self:PlayIdleAnimation(weaponName, character)
 	end)
 
@@ -113,6 +124,7 @@ function WeaponController:HookToolEvents(tool, character)
 		if self.EquippedWeapon == weaponName then
 			self.EquippedWeapon = nil
 			self.IsHoldingTrigger = false
+			self.IsReloading = false -- Cancel reloading if unequipped
 		end
 		self:StopIdleAnimation()
 	end)
@@ -156,12 +168,12 @@ end
 
 function WeaponController:HandleAttackInput()
 	local stats = WeaponData[self.EquippedWeapon]
-	if not stats then
+	if not stats or self.IsReloading then
 		return
 	end
 
 	if stats.Automatic then
-		while self.IsHoldingTrigger and self.CanAttack and self.EquippedWeapon do
+		while self.IsHoldingTrigger and self.CanAttack and self.EquippedWeapon and not self.IsReloading do
 			self:PerformAttack(stats)
 		end
 	else
@@ -169,6 +181,72 @@ function WeaponController:HandleAttackInput()
 			self:PerformAttack(stats)
 		end
 	end
+end
+
+-- ==========================================
+-- RELOADING LOGIC
+-- ==========================================
+function WeaponController:ReloadWeapon()
+	if not self.EquippedWeapon or self.IsReloading then
+		return
+	end
+
+	local player = Players.LocalPlayer
+	local tool = player.Character:FindFirstChild(self.EquippedWeapon)
+	if not tool then
+		return
+	end
+
+	local stats = WeaponData[self.EquippedWeapon]
+	if not stats or stats.Type ~= "Ranged" then
+		return
+	end
+
+	local currentAmmo = tool:GetAttribute("CurrentAmmo")
+	local reserveAmmo = tool:GetAttribute("ReserveAmmo")
+
+	if currentAmmo >= stats.MaxAmmo or reserveAmmo <= 0 then
+		print("Cannot reload (Clip full or no reserve).")
+		return
+	end
+
+	self.IsReloading = true
+	self.IsHoldingTrigger = false
+	print("Reloading " .. self.EquippedWeapon .. "...")
+
+	-- Play Reload Animation (If you add one later)
+	local humanoid = player.Character:FindFirstChild("Humanoid")
+	local animator = humanoid and humanoid:FindFirstChild("Animator")
+	if animator and stats.ReloadAnimation and stats.ReloadAnimation ~= "rbxassetid://00000000000" then
+		local animation = Instance.new("Animation")
+		animation.AnimationId = stats.ReloadAnimation
+		self.CurrentReloadTrack = animator:LoadAnimation(animation)
+		self.CurrentReloadTrack.Priority = Enum.AnimationPriority.Action4
+		self.CurrentReloadTrack:Play()
+	end
+
+	task.wait(stats.ReloadTime)
+
+	-- Make sure we are still holding the same gun after the wait time!
+	if self.EquippedWeapon == tool.Name then
+		local ammoNeeded = stats.MaxAmmo - currentAmmo
+		local ammoToTake = math.min(ammoNeeded, reserveAmmo)
+
+		tool:SetAttribute("CurrentAmmo", currentAmmo + ammoToTake)
+		tool:SetAttribute("ReserveAmmo", reserveAmmo - ammoToTake)
+
+		print(
+			"Reload Complete! Ammo: " .. tool:GetAttribute("CurrentAmmo") .. " / " .. tool:GetAttribute("ReserveAmmo")
+		)
+	end
+
+	if self.CurrentReloadTrack then
+		self.CurrentReloadTrack:Stop()
+		self.CurrentReloadTrack:Destroy()
+		self.CurrentReloadTrack = nil
+	end
+
+	self.IsReloading = false
 end
 
 -- ==========================================
@@ -188,11 +266,9 @@ function WeaponController:RenderShootVisuals(stats, tool, hitPosition)
 	local origin = muzzle.WorldPosition
 	local distance = (hitPosition - origin).Magnitude
 
-	-- Read what the individual player has equipped from the Tool's Attributes!
 	local equippedFlash = tool:GetAttribute("MuzzleFlash")
 	local equippedTracer = tool:GetAttribute("Tracer")
 
-	-- 1. Muzzle Flash
 	if equippedFlash then
 		local flashTemplate = Cosmetics.MuzzleFlashes:FindFirstChild(equippedFlash)
 		if flashTemplate then
@@ -203,7 +279,6 @@ function WeaponController:RenderShootVisuals(stats, tool, hitPosition)
 		end
 	end
 
-	-- 2. Bullet Tracer
 	if equippedTracer then
 		local tracerTemplate = Cosmetics.Tracers:FindFirstChild(equippedTracer)
 		if tracerTemplate then
@@ -238,8 +313,27 @@ function WeaponController:PerformAttack(stats)
 	self.CanAttack = false
 	local player = Players.LocalPlayer
 	local character = player.Character
+	local tool = character:FindFirstChild(self.EquippedWeapon)
 
 	if stats.Type == "Ranged" then
+		if not tool then
+			return
+		end
+
+		-- CHECK AND DRAIN AMMO
+		local currentAmmo = tool:GetAttribute("CurrentAmmo")
+		if currentAmmo <= 0 then
+			print("Click! Out of Ammo.")
+			self.CanAttack = true
+			self.IsHoldingTrigger = false
+			self:ReloadWeapon() -- Auto-reload attempt
+			return
+		end
+
+		tool:SetAttribute("CurrentAmmo", currentAmmo - 1)
+		-- Print ammo after every shot for testing
+		print("Ammo: " .. (currentAmmo - 1) .. " / " .. tool:GetAttribute("ReserveAmmo"))
+
 		local camera = Workspace.CurrentCamera
 		local origin = camera.CFrame.Position
 		local direction = camera.CFrame.LookVector * 1000
@@ -250,17 +344,12 @@ function WeaponController:PerformAttack(stats)
 
 		local result = Workspace:Raycast(origin, direction, rayParams)
 
-		-- Default hit position to max range if we hit nothing
 		local hitPosition = origin + direction
 		if result then
 			hitPosition = result.Position
 		end
 
-		-- RENDER COSMETICS
-		local tool = character:FindFirstChild(self.EquippedWeapon)
-		if tool then
-			self:RenderShootVisuals(stats, tool, hitPosition)
-		end
+		self:RenderShootVisuals(stats, tool, hitPosition)
 
 		if result then
 			local remote = Shared.Weapons:FindFirstChild("WeaponEvent")

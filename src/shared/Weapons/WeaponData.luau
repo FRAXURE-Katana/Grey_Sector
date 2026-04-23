@@ -3,11 +3,12 @@ local WeaponData = {
 		Type = "Ranged",
 		BaseDamage = 25,
 		FireRate = 0.1,
-		MaxAmmo = 30,
-		ReloadTime = 2,
+		MaxAmmo = 30, -- Bullets in the clip
+		MaxReserve = 120, -- Total backup bullets
+		ReloadTime = 2, -- Seconds it takes to reload
 		Automatic = true,
 		IdleAnimation = "rbxassetid://82735357454134",
-		-- Notice: MuzzleFlash and Tracer are GONE from here!
+		ReloadAnimation = "rbxassetid://00000000000", -- Replace later with an actual animation!
 	},
 
 	Sword = {
