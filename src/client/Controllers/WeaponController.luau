@@ -408,30 +408,36 @@ function WeaponController:RenderHitFeedback(stats, result)
 			Debris:AddItem(sound, 2)
 		end
 
-		-- 2. PROCEDURAL BLOOD SPLATTER
-		local attachment = Instance.new("Attachment")
-		-- Anchors right to the world coordinates of the hit
-		attachment.WorldCFrame = CFrame.lookAt(result.Position, result.Position + result.Normal)
-		attachment.Parent = hitPart
+		-- 2. BULLETPROOF BLOOD SPAWNER
+		-- We use an invisible, anchored Part in the Workspace to prevent moving-mesh culling bugs.
+		local impactAnchor = Instance.new("Part")
+		impactAnchor.Size = Vector3.new(0.1, 0.1, 0.1)
+		impactAnchor.Transparency = 1
+		impactAnchor.CanCollide = false
+		impactAnchor.Anchored = true
+		impactAnchor.CFrame = CFrame.lookAt(result.Position, result.Position + result.Normal)
+		impactAnchor.Parent = Workspace
 
 		local blood = Instance.new("ParticleEmitter")
-		blood.Color = ColorSequence.new(Color3.fromRGB(150, 0, 0))
-		blood.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 0.5) })
-		blood.Speed = NumberRange.new(5, 15)
-		blood.SpreadAngle = Vector2.new(35, 35)
-		blood.Lifetime = NumberRange.new(0.2, 0.4)
+		blood.Color = ColorSequence.new(Color3.fromRGB(200, 0, 0))
+		blood.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 0.8) })
+		blood.Speed = NumberRange.new(15, 30)
+		blood.SpreadAngle = Vector2.new(45, 45)
+		blood.Lifetime = NumberRange.new(0.3, 0.6)
 		blood.Rate = 0
-		blood.Drag = 5
+		blood.Drag = 4
 		blood.Acceleration = Vector3.new(0, -30, 0)
-		blood.ZOffset = 0.5
-
-		-- Ensures it fires outwards, away from the surface
 		blood.EmissionDirection = Enum.NormalId.Front
-		blood.Parent = attachment
+		blood.Parent = impactAnchor
 
-		blood:Emit(15)
+		-- We delay the emission by 1 single frame so Roblox's rendering engine catches up
+		task.delay(0.01, function()
+			if blood and impactAnchor then
+				blood:Emit(25)
+			end
+		end)
 
-		Debris:AddItem(attachment, 1)
+		Debris:AddItem(impactAnchor, 2)
 	end
 end
 
