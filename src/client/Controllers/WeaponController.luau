@@ -26,7 +26,7 @@ WeaponController.CurrentComboIndex = 1
 WeaponController.LastAttackTime = 0
 
 function WeaponController:Start()
-	print("WeaponController Started (Hit Feedback Enabled).")
+	print("WeaponController Started (Procedural Hit Feedback Enabled).")
 
 	local player = Players.LocalPlayer
 
@@ -387,7 +387,7 @@ function WeaponController:RenderShootVisuals(stats, tool, hitPosition)
 end
 
 -- ==========================================
--- HIT FEEDBACK LOGIC (SOUND & BLOOD)
+-- HIT FEEDBACK LOGIC (SOUND & PROCEDURAL BLOOD)
 -- ==========================================
 function WeaponController:RenderHitFeedback(stats, result)
 	local hitPart = result.Instance
@@ -408,32 +408,30 @@ function WeaponController:RenderHitFeedback(stats, result)
 			Debris:AddItem(sound, 2)
 		end
 
-		-- 2. SPAWN PRE-MADE BLOOD PARTICLES
-		if stats.ImpactEffect then
-			local impactTemplate = Cosmetics:FindFirstChild(stats.ImpactEffect)
-			if impactTemplate then
-				local attachment = Instance.new("Attachment")
-				attachment.Parent = hitPart
+		-- 2. PROCEDURAL BLOOD SPLATTER
+		local attachment = Instance.new("Attachment")
+		-- Anchors right to the world coordinates of the hit
+		attachment.WorldCFrame = CFrame.lookAt(result.Position, result.Position + result.Normal)
+		attachment.Parent = hitPart
 
-				-- FIX 1: Use WorldCFrame instead of CFrame so it spawns exactly on the bullet hole!
-				attachment.WorldCFrame = CFrame.lookAt(result.Position, result.Position + result.Normal)
+		local blood = Instance.new("ParticleEmitter")
+		blood.Color = ColorSequence.new(Color3.fromRGB(150, 0, 0))
+		blood.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 0.5) })
+		blood.Speed = NumberRange.new(5, 15)
+		blood.SpreadAngle = Vector2.new(35, 35)
+		blood.Lifetime = NumberRange.new(0.2, 0.4)
+		blood.Rate = 0
+		blood.Drag = 5
+		blood.Acceleration = Vector3.new(0, -30, 0)
+		blood.ZOffset = 0.5
 
-				for _, child in pairs(impactTemplate:GetChildren()) do
-					if child:IsA("ParticleEmitter") then
-						local emitter = child:Clone()
-						emitter.Parent = attachment
-						emitter.Enabled = false
+		-- Ensures it fires outwards, away from the surface
+		blood.EmissionDirection = Enum.NormalId.Front
+		blood.Parent = attachment
 
-						-- FIX 2: Force the particles to shoot "Forward" (away from the surface)
-						emitter.EmissionDirection = Enum.NormalId.Front
+		blood:Emit(15)
 
-						emitter:Emit(15)
-					end
-				end
-
-				Debris:AddItem(attachment, 2)
-			end
-		end
+		Debris:AddItem(attachment, 1)
 	end
 end
 
@@ -489,7 +487,6 @@ function WeaponController:PerformAttack(stats)
 		self:RenderShootVisuals(stats, tool, hitPosition)
 
 		if result then
-			-- TRIGGER HIT FEEDBACK
 			self:RenderHitFeedback(stats, result)
 
 			local remote = Shared.Weapons:FindFirstChild("WeaponEvent")
@@ -542,7 +539,6 @@ function WeaponController:PerformAttack(stats)
 			local result = Workspace:Spherecast(origin, 3, direction, rayParams)
 
 			if result then
-				-- TRIGGER HIT FEEDBACK
 				self:RenderHitFeedback(stats, result)
 
 				local remote = Shared.Weapons:FindFirstChild("WeaponEvent")
