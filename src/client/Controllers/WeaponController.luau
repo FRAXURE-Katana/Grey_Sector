@@ -18,7 +18,6 @@ WeaponController.IsReloading = false
 
 WeaponController.CurrentIdleTrack = nil
 WeaponController.CurrentReloadTrack = nil
--- NEW: Movement Tracking Variables
 WeaponController.CurrentRunTrack = nil
 WeaponController.MovementConnection = nil
 WeaponController.IsMoving = false
@@ -27,7 +26,7 @@ WeaponController.CurrentComboIndex = 1
 WeaponController.LastAttackTime = 0
 
 function WeaponController:Start()
-	print("WeaponController Started (Run Animations Enabled).")
+	print("WeaponController Started (Hit Feedback Enabled).")
 
 	local player = Players.LocalPlayer
 
@@ -110,7 +109,6 @@ function WeaponController:HookToolEvents(tool, character)
 	local weaponName = tool.Name
 
 	tool.Equipped:Connect(function()
-		-- NEW: Safeguard to kill any lingering movement connections from a previous weapon swap
 		if self.MovementConnection then
 			self.MovementConnection:Disconnect()
 			self.MovementConnection = nil
@@ -120,23 +118,11 @@ function WeaponController:HookToolEvents(tool, character)
 		self.IsHoldingTrigger = false
 		self.CurrentComboIndex = 1
 
-		if tool:GetAttribute("CurrentAmmo") then
-			print(
-				weaponName
-					.. " Equipped. Ammo: "
-					.. tool:GetAttribute("CurrentAmmo")
-					.. " / "
-					.. tool:GetAttribute("ReserveAmmo")
-			)
-		end
-
-		-- Movement Tracking Logic
 		local humanoid = character:FindFirstChild("Humanoid")
 		if humanoid then
 			local stats = WeaponData[weaponName]
 			local hasRunAnim = stats and stats.RunAnimation and stats.RunAnimation ~= "rbxassetid://00000000000"
 
-			-- Check initial movement state
 			self.IsMoving = humanoid.MoveDirection.Magnitude > 0
 
 			if self.IsMoving and hasRunAnim then
@@ -145,7 +131,6 @@ function WeaponController:HookToolEvents(tool, character)
 				self:PlayIdleAnimation(weaponName, character)
 			end
 
-			-- Listen for starting/stopping
 			self.MovementConnection = humanoid.Running:Connect(function(speed)
 				if hasRunAnim then
 					local isMovingNow = speed > 0.1
@@ -165,13 +150,11 @@ function WeaponController:HookToolEvents(tool, character)
 	end)
 
 	tool.Unequipped:Connect(function()
-		-- We only want to clean up if this tool is STILL the officially equipped weapon
 		if self.EquippedWeapon == weaponName then
 			self.EquippedWeapon = nil
 			self.IsHoldingTrigger = false
 			self.IsReloading = false
 
-			-- MOVED: These are now safely inside the if-statement!
 			if self.MovementConnection then
 				self.MovementConnection:Disconnect()
 				self.MovementConnection = nil
@@ -245,7 +228,6 @@ function WeaponController:PlayRunAnimation(weaponName, character)
 
 		self.CurrentRunTrack = animator:LoadAnimation(animation)
 		self.CurrentRunTrack.Looped = true
-		-- Priority is set to Action so it properly overrides the default Roblox run animation
 		self.CurrentRunTrack.Priority = Enum.AnimationPriority.Action
 		self.CurrentRunTrack:Play()
 	end
@@ -313,13 +295,11 @@ function WeaponController:ReloadWeapon()
 	local reserveAmmo = tool:GetAttribute("ReserveAmmo")
 
 	if currentAmmo >= stats.MaxAmmo or reserveAmmo <= 0 then
-		print("Cannot reload (Clip full or no reserve).")
 		return
 	end
 
 	self.IsReloading = true
 	self.IsHoldingTrigger = false
-	print("Reloading " .. self.EquippedWeapon .. "...")
 
 	self:PlaySound(stats.ReloadSound, tool:FindFirstChild("Handle"))
 
@@ -341,10 +321,6 @@ function WeaponController:ReloadWeapon()
 
 		tool:SetAttribute("CurrentAmmo", currentAmmo + ammoToTake)
 		tool:SetAttribute("ReserveAmmo", reserveAmmo - ammoToTake)
-
-		print(
-			"Reload Complete! Ammo: " .. tool:GetAttribute("CurrentAmmo") .. " / " .. tool:GetAttribute("ReserveAmmo")
-		)
 	end
 
 	if self.CurrentReloadTrack then
@@ -410,6 +386,54 @@ function WeaponController:RenderShootVisuals(stats, tool, hitPosition)
 	end
 end
 
+-- ==========================================
+-- HIT FEEDBACK LOGIC (SOUND & BLOOD)
+-- ==========================================
+function WeaponController:RenderHitFeedback(stats, result)
+	local hitPart = result.Instance
+	if not hitPart or not hitPart.Parent then
+		return
+	end
+
+	-- Check if we hit an NPC or Player (they will have a Humanoid)
+	local humanoid = hitPart.Parent:FindFirstChild("Humanoid") or hitPart.Parent.Parent:FindFirstChild("Humanoid")
+
+	if humanoid and humanoid.Health > 0 then
+		-- 1. PLAY HIT MARKER SOUND
+		if stats.HitSound and stats.HitSound ~= "rbxassetid://00000000000" then
+			local sound = Instance.new("Sound")
+			sound.SoundId = stats.HitSound
+			sound.Volume = 1
+			-- Put it in the Camera so it plays directly in the player's ears, like CoD!
+			sound.Parent = Workspace.CurrentCamera
+			sound:Play()
+			Debris:AddItem(sound, 2)
+		end
+
+		-- 2. PROCEDURAL BLOOD SPLATTER
+		local attachment = Instance.new("Attachment")
+		-- Align the attachment to face away from the surface we hit
+		attachment.CFrame = CFrame.lookAt(result.Position, result.Position + result.Normal)
+		attachment.Parent = hitPart
+
+		local blood = Instance.new("ParticleEmitter")
+		blood.Color = ColorSequence.new(Color3.fromRGB(150, 0, 0)) -- Deep red
+		blood.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 0.5) })
+		blood.Speed = NumberRange.new(5, 15) -- Shoot out fast
+		blood.SpreadAngle = Vector2.new(35, 35) -- Cone shape
+		blood.Lifetime = NumberRange.new(0.2, 0.4) -- Short burst
+		blood.Rate = 0 -- Keep rate at 0 because we only emit manually
+		blood.Drag = 5 -- Slow down fast like real liquid
+		blood.Acceleration = Vector3.new(0, -30, 0) -- Gravity pulls the blood down
+		blood.ZOffset = 0.5
+		blood.Parent = attachment
+
+		blood:Emit(15) -- Blast 15 particles of blood
+
+		Debris:AddItem(attachment, 1) -- Clean up the attachment
+	end
+end
+
 function WeaponController:PerformAttack(stats)
 	self.CanAttack = false
 	local player = Players.LocalPlayer
@@ -423,7 +447,6 @@ function WeaponController:PerformAttack(stats)
 
 		local currentAmmo = tool:GetAttribute("CurrentAmmo")
 		if currentAmmo <= 0 then
-			print("Click! Out of Ammo.")
 			self.CanAttack = true
 			self.IsHoldingTrigger = false
 			self:ReloadWeapon()
@@ -463,6 +486,9 @@ function WeaponController:PerformAttack(stats)
 		self:RenderShootVisuals(stats, tool, hitPosition)
 
 		if result then
+			-- TRIGGER HIT FEEDBACK
+			self:RenderHitFeedback(stats, result)
+
 			local remote = Shared.Weapons:FindFirstChild("WeaponEvent")
 			if remote then
 				remote:FireServer(self.EquippedWeapon, result.Instance)
@@ -513,6 +539,9 @@ function WeaponController:PerformAttack(stats)
 			local result = Workspace:Spherecast(origin, 3, direction, rayParams)
 
 			if result then
+				-- TRIGGER HIT FEEDBACK
+				self:RenderHitFeedback(stats, result)
+
 				local remote = Shared.Weapons:FindFirstChild("WeaponEvent")
 				if remote then
 					remote:FireServer(self.EquippedWeapon, result.Instance)

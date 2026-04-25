@@ -12,7 +12,8 @@ local WeaponData = {
 		ShootAnimation = "rbxassetid://96858727197533",
 		ShootSound = "rbxassetid://123304996879837",
 		ReloadSound = "rbxassetid://105895546453287",
-		RunAnimation = "rbxassetid://00000000000", -- Optional for the AR
+		HitSound = "rbxassetid://71222139822639",
+		RunAnimation = "rbxassetid://00000000000",
 	},
 
 	Sword = {
@@ -24,12 +25,13 @@ local WeaponData = {
 		IdleAnimation = "rbxassetid://119340501302594",
 		SwingSound = "rbxassetid://140496995751307",
 		AttackAnimations = {
-			"rbxassetid://117598264340206", -- Slash 1
-			"rbxassetid://124053686608236", -- Slash 2
-			"rbxassetid://139883539777396", -- Replace with your new Slash 3 ID
-			"rbxassetid://82332546535930", -- Replace with your new Slash 4 ID
+			"rbxassetid://117598264340206",
+			"rbxassetid://124053686608236",
+			"rbxassetid://139883539777396",
+			"rbxassetid://82332546535930",
 		},
-		RunAnimation = "rbxassetid://118023174337729", -- Replace with your Sword Run ID
+		HitSound = "rbxassetid://123467515416190",
+		RunAnimation = "rbxassetid://118023174337729",
 	},
 }
 
