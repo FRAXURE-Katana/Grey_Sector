@@ -12,8 +12,9 @@ local WeaponData = {
 		ShootAnimation = "rbxassetid://96858727197533",
 		ShootSound = "rbxassetid://123304996879837",
 		ReloadSound = "rbxassetid://105895546453287",
-		HitSound = "rbxassetid://71222139822639",
+		HitSound = "rbxassetid://71222139822639", -- Your Hit Marker ID
 		RunAnimation = "rbxassetid://00000000000",
+		ImpactEffect = "Blood",
 	},
 
 	Sword = {
@@ -32,6 +33,7 @@ local WeaponData = {
 		},
 		HitSound = "rbxassetid://123467515416190",
 		RunAnimation = "rbxassetid://118023174337729",
+		ImpactEffect = "Blood",
 	},
 }
 

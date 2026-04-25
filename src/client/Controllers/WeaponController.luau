@@ -404,33 +404,39 @@ function WeaponController:RenderHitFeedback(stats, result)
 			local sound = Instance.new("Sound")
 			sound.SoundId = stats.HitSound
 			sound.Volume = 1
-			-- Put it in the Camera so it plays directly in the player's ears, like CoD!
+			-- Put it in the Camera so it plays directly in the player's ears
 			sound.Parent = Workspace.CurrentCamera
 			sound:Play()
 			Debris:AddItem(sound, 2)
 		end
 
-		-- 2. PROCEDURAL BLOOD SPLATTER
-		local attachment = Instance.new("Attachment")
-		-- Align the attachment to face away from the surface we hit
-		attachment.CFrame = CFrame.lookAt(result.Position, result.Position + result.Normal)
-		attachment.Parent = hitPart
+		-- 2. SPAWN PRE-MADE BLOOD PARTICLES
+		if stats.ImpactEffect then
+			local impactTemplate = Cosmetics:FindFirstChild(stats.ImpactEffect)
+			if impactTemplate then
+				local attachment = Instance.new("Attachment")
+				-- Align the attachment to face away from the surface we hit
+				attachment.CFrame = CFrame.lookAt(result.Position, result.Position + result.Normal)
+				attachment.Parent = hitPart
 
-		local blood = Instance.new("ParticleEmitter")
-		blood.Color = ColorSequence.new(Color3.fromRGB(150, 0, 0)) -- Deep red
-		blood.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 0.5) })
-		blood.Speed = NumberRange.new(5, 15) -- Shoot out fast
-		blood.SpreadAngle = Vector2.new(35, 35) -- Cone shape
-		blood.Lifetime = NumberRange.new(0.2, 0.4) -- Short burst
-		blood.Rate = 0 -- Keep rate at 0 because we only emit manually
-		blood.Drag = 5 -- Slow down fast like real liquid
-		blood.Acceleration = Vector3.new(0, -30, 0) -- Gravity pulls the blood down
-		blood.ZOffset = 0.5
-		blood.Parent = attachment
+				-- Loop through the pre-made part and clone all its emitters!
+				for _, child in pairs(impactTemplate:GetChildren()) do
+					if child:IsA("ParticleEmitter") then
+						local emitter = child:Clone()
+						emitter.Parent = attachment
 
-		blood:Emit(15) -- Blast 15 particles of blood
+						-- Ensure they don't spray infinitely
+						emitter.Enabled = false
 
-		Debris:AddItem(attachment, 1) -- Clean up the attachment
+						-- Blast a burst of particles (You can raise or lower this number)
+						emitter:Emit(15)
+					end
+				end
+
+				-- Clean up the attachment after the particles fade
+				Debris:AddItem(attachment, 2)
+			end
+		end
 	end
 end
 
