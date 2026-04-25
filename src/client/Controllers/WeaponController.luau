@@ -395,7 +395,6 @@ function WeaponController:RenderHitFeedback(stats, result)
 		return
 	end
 
-	-- Check if we hit an NPC or Player (they will have a Humanoid)
 	local humanoid = hitPart.Parent:FindFirstChild("Humanoid") or hitPart.Parent.Parent:FindFirstChild("Humanoid")
 
 	if humanoid and humanoid.Health > 0 then
@@ -404,7 +403,6 @@ function WeaponController:RenderHitFeedback(stats, result)
 			local sound = Instance.new("Sound")
 			sound.SoundId = stats.HitSound
 			sound.Volume = 1
-			-- Put it in the Camera so it plays directly in the player's ears
 			sound.Parent = Workspace.CurrentCamera
 			sound:Play()
 			Debris:AddItem(sound, 2)
@@ -415,25 +413,24 @@ function WeaponController:RenderHitFeedback(stats, result)
 			local impactTemplate = Cosmetics:FindFirstChild(stats.ImpactEffect)
 			if impactTemplate then
 				local attachment = Instance.new("Attachment")
-				-- Align the attachment to face away from the surface we hit
-				attachment.CFrame = CFrame.lookAt(result.Position, result.Position + result.Normal)
 				attachment.Parent = hitPart
 
-				-- Loop through the pre-made part and clone all its emitters!
+				-- FIX 1: Use WorldCFrame instead of CFrame so it spawns exactly on the bullet hole!
+				attachment.WorldCFrame = CFrame.lookAt(result.Position, result.Position + result.Normal)
+
 				for _, child in pairs(impactTemplate:GetChildren()) do
 					if child:IsA("ParticleEmitter") then
 						local emitter = child:Clone()
 						emitter.Parent = attachment
-
-						-- Ensure they don't spray infinitely
 						emitter.Enabled = false
 
-						-- Blast a burst of particles (You can raise or lower this number)
+						-- FIX 2: Force the particles to shoot "Forward" (away from the surface)
+						emitter.EmissionDirection = Enum.NormalId.Front
+
 						emitter:Emit(15)
 					end
 				end
 
-				-- Clean up the attachment after the particles fade
 				Debris:AddItem(attachment, 2)
 			end
 		end
