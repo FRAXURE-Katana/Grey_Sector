@@ -419,21 +419,22 @@ function WeaponController:RenderHitFeedback(stats, result)
 		impactAnchor.Parent = Workspace
 
 		local blood = Instance.new("ParticleEmitter")
-		blood.Color = ColorSequence.new(Color3.fromRGB(200, 0, 0))
+		blood.Texture = "rbxassetid://117219392616758"
+		blood.Color = ColorSequence.new(Color3.fromRGB(242, 242, 123))
 		blood.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 0.8) })
-		blood.Speed = NumberRange.new(15, 30)
+		blood.Speed = NumberRange.new(25, 40)
 		blood.SpreadAngle = Vector2.new(45, 45)
 		blood.Lifetime = NumberRange.new(0.3, 0.6)
 		blood.Rate = 0
 		blood.Drag = 4
-		blood.Acceleration = Vector3.new(0, -30, 0)
+		blood.Acceleration = Vector3.new(0, -10, 0)
 		blood.EmissionDirection = Enum.NormalId.Front
 		blood.Parent = impactAnchor
 
 		-- We delay the emission by 1 single frame so Roblox's rendering engine catches up
 		task.delay(0.01, function()
 			if blood and impactAnchor then
-				blood:Emit(25)
+				blood:Emit(5)
 			end
 		end)
 
