@@ -71,7 +71,7 @@ function HUDController:SetupUI(player)
 	-- global timer
 	local timerText = Instance.new("TextLabel")
 	timerText.Name = "TimerText"
-	timerText.AcnhorPoint = Vector3.new(0.5, 0)
+	timerText.AnchorPoint = Vector2.new(0.5, 0)
 	timerText.Position = UDim2.new(0.5, 0, 0.02, 0)
 	timerText.Size = UDim2.new(0.3, 0, 0.05, 0)
 	timerText.BackgroundTransparency = 1

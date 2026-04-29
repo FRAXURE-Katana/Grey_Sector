@@ -4,6 +4,8 @@ local Workspace = game:GetService("Workspace")
 
 local GameLoopService = {}
 
+GameLoopService.RaidEnded = Instance.new("BindableEvent")
+
 GameLoopService.RaidDuration = 15 -- 15 mins
 GameLoopService.CooldownDuration = 30 -- 30 secs
 
@@ -24,7 +26,7 @@ function GameLoopService:Start()
 				task.wait(1)
 			end
 
-			self:WipeRaid()
+			self.RaidEnded:Fire()
 
 			Workspace:SetAttribute("RaidActive", false)
 
