@@ -38,6 +38,9 @@ end
 
 function DeployService:DeployPlayer(player, character, spawnPointsFolder)
 	local rootPart = character:FindFirstChild("HumanoidRootPart")
+
+	player:SetAttribute("InRaid", true)
+
 	if not rootPart then
 		return
 	end

@@ -1,4 +1,5 @@
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local HUDController = {}
 
@@ -32,9 +33,7 @@ function HUDController:SetupUI(player)
 	screenGui.ResetOnSpawn = false
 	screenGui.Parent = playerGui
 
-	-- ==========================================
-	-- HEALTH BAR (Bottom Left)
-	-- ==========================================
+	-- health bar
 	local healthBg = Instance.new("Frame")
 	healthBg.Name = "HealthBackground"
 	healthBg.AnchorPoint = Vector2.new(0, 1)
@@ -53,9 +52,7 @@ function HUDController:SetupUI(player)
 
 	self.HealthBar = healthFill
 
-	-- ==========================================
-	-- AMMO TEXT (Bottom Right)
-	-- ==========================================
+	-- Ammo text
 	local ammoText = Instance.new("TextLabel")
 	ammoText.Name = "AmmoText"
 	ammoText.AnchorPoint = Vector2.new(1, 1)
@@ -70,6 +67,37 @@ function HUDController:SetupUI(player)
 	ammoText.Parent = screenGui
 
 	self.AmmoText = ammoText
+
+	-- global timer
+	local timerText = Instance.new("TextLabel")
+	timerText.Name = "TimerText"
+	timerText.AcnhorPoint = Vector3.new(0.5, 0)
+	timerText.Position = UDim2.new(0.5, 0, 0.02, 0)
+	timerText.Size = UDim2.new(0.3, 0, 0.05, 0)
+	timerText.BackgroundTransparency = 1
+	timerText.Font = Enum.Font.GothamBold
+	timerText.Text = "LOADING..."
+	timerText.TextColor3 = Color3.fromRGB(255, 255, 255)
+
+	timerText.TextStrokeTransparency = 0.2
+	timerText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+
+	timerText.TextScaled = true
+	timerText.Parent = screenGui
+
+	local globalTimer = ReplicatedStorage:WaitForChild("GlobalTimer", 10)
+	if globalTimer then
+		timerText.Text = globalTimer.Value
+		globalTimer.Changed:Connect(function(newTime)
+			timerText.Text = newTime
+
+			if string.match(newTime, "00:") and string.match(newTime, "RAID") then
+				timerText.TextColor3 = Color3.fromRGB(255, 50, 50)
+			else
+				timerText.TextColor3 = Color3.fromRGB(255, 255, 255)
+			end
+		end)
+	end
 end
 
 function HUDController:SetupCharacter(character)

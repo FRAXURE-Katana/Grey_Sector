@@ -33,6 +33,8 @@ function ExtractionService:HandleExtraction(hit, hubSpawn)
 	local player = Players:GetPlayerFromCharacter(character)
 	local humanoid = character:FindFirstChild("Humanoid")
 
+	player:SetAttribute("InRaid", false)
+
 	if player and humanoid and humanoid.Health > 0 and not self.ExtractingPlayers[player.UserId] then
 		self.ExtractingPlayers[player.UserId] = true
 

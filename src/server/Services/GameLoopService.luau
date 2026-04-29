@@ -1,49 +1,57 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
 local GameLoopService = {}
 
-local RAID_DURATION = 15 * 60 -- 15 minutes
-local COOLDOWN_DURATION = 2 * 60 -- 2 minutes
-
--- Create BindableEvents so other scripts can listen for state changes
-GameLoopService.RaidStarted = Instance.new("BindableEvent")
-GameLoopService.RaidEnded = Instance.new("BindableEvent")
-
-GameLoopService.CurrentPhase = "Cooldown"
-GameLoopService.TimeRemaining = 0
+GameLoopService.RaidDuration = 15 -- 15 mins
+GameLoopService.CooldownDuration = 30 -- 30 secs
 
 function GameLoopService:Start()
-	print("GameLoopService Started.")
+	local timerValue = Instance.new("StringValue")
+	timerValue.Name = "GlobalTimer"
+	timerValue.Value = "WAITING..."
+	timerValue.Parent = ReplicatedStorage
+
 	task.spawn(function()
 		while true do
-			self:StartRaidPhase()
-			self:StartCooldownPhase()
+			Workspace:SetAttribute("RaidActive", true)
+
+			for i = self.RaidDuration, 0, -1 do
+				local minutes = math.floor(i / 60)
+				local seconds = i % 60
+				timerValue.Value = "RAID ENDS IN: " .. string.format("%02d:%02d", minutes, seconds)
+				task.wait(1)
+			end
+
+			self:WipeRaid()
+
+			Workspace:SetAttribute("RaidActive", false)
+
+			for i = self.CooldownDuration, 0, -1 do
+				local minutes = math.floor(i / 60)
+				local seconds = i % 60
+				timerValue.Value = "NEXT RAID IN: " .. string.format("%02d:%02d", minutes, seconds)
+				task.wait(1)
+			end
 		end
 	end)
 end
 
-function GameLoopService:StartRaidPhase()
-	self.CurrentPhase = "Raid"
-	self.TimeRemaining = RAID_DURATION
-	print("--- RAID STARTED: 15 Minutes Remaining ---")
+function GameLoopService:WipeRaid()
+	for _, player in pairs(Players:GetPlayers()) do
+		if player:GetAttribute("InRaid") then
+			local character = player.Character
+			if character then
+				local humanoid = character:FindFirstChild("Humanoid")
+				if humanoid then
+					humanoid.Health = 0 -- Kill them
+					print(player.Name .. " failed to extract and was lost to the Grey Sector.")
+				end
+			end
 
-	self.RaidStarted:Fire() -- Let other systems know the raid began
-
-	while self.TimeRemaining > 0 do
-		task.wait(1)
-		self.TimeRemaining -= 1
-	end
-
-	print("--- RAID ENDED ---")
-	self.RaidEnded:Fire() -- Signal that time is up!
-end
-
-function GameLoopService:StartCooldownPhase()
-	self.CurrentPhase = "Cooldown"
-	self.TimeRemaining = COOLDOWN_DURATION
-	print("--- COOLDOWN STARTED: Next raid in 2 minutes ---")
-
-	while self.TimeRemaining > 0 do
-		task.wait(1)
-		self.TimeRemaining -= 1
+			player:SetAttribute("InRaid", false)
+		end
 	end
 end
 
