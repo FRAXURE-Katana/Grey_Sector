@@ -1,6 +1,8 @@
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 
+local PlayerManagerService = require(script.Parent.PlayerManagerService)
+
 local ExtractionService = {}
 
 ExtractionService.ExtractingPlayers = {}
@@ -33,7 +35,7 @@ function ExtractionService:HandleExtraction(hit, hubSpawn)
 	local player = Players:GetPlayerFromCharacter(character)
 	local humanoid = character:FindFirstChild("Humanoid")
 
-	player:SetAttribute("InRaid", false)
+	PlayerManagerService:SetPlayerState(player, "InHub")
 
 	if player and humanoid and humanoid.Health > 0 and not self.ExtractingPlayers[player.UserId] then
 		self.ExtractingPlayers[player.UserId] = true

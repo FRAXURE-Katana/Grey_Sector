@@ -2,6 +2,8 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local Debris = game:GetService("Debris")
 
+local PlayerManagerService = require(script.Parent.PlayerManagerService)
+
 local DeployService = {}
 
 DeployService.Debounce = {}
@@ -39,7 +41,7 @@ end
 function DeployService:DeployPlayer(player, character, spawnPointsFolder)
 	local rootPart = character:FindFirstChild("HumanoidRootPart")
 
-	player:SetAttribute("InRaid", true)
+	PlayerManagerService:SetPlayerState(player, "InRaid")
 
 	if not rootPart then
 		return

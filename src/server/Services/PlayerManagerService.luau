@@ -1,11 +1,7 @@
 local Players = game:GetService("Players")
-
--- Require the GameLoopService so we can listen to its events
 local GameLoopService = require(script.Parent.GameLoopService)
 
 local PlayerManagerService = {}
-
-PlayerManagerService.PlayerStates = {}
 
 function PlayerManagerService:Start()
 	print("PlayerManagerService Started.")
@@ -16,39 +12,28 @@ function PlayerManagerService:Start()
 	end)
 
 	Players.PlayerAdded:Connect(function(player)
-		self:SetupPlayer(player)
+		self:SetPlayerState(player, "InHub")
 
 		player.CharacterAdded:Connect(function(character)
 			self:OnCharacterAdded(player, character)
 		end)
 	end)
-
-	Players.PlayerRemoving:Connect(function(player)
-		self.PlayerStates[player] = nil
-	end)
 end
 
 function PlayerManagerService:PunishUnextractedPlayers()
 	print("Checking for players left in the raid...")
-	for player, state in pairs(self.PlayerStates) do
-		if state == "InRaid" then
+	for _, player in pairs(Players:GetPlayers()) do
+		if player:GetAttribute("PlayerState") == "InRaid" then
 			print(player.Name .. " failed to extract in time!")
 
-			-- Kill the player's character
 			if player.Character then
 				local humanoid = player.Character:FindFirstChild("Humanoid")
 				if humanoid then
 					humanoid.Health = 0
 				end
 			end
-			-- Note: The state will automatically change to "Dead" because of
-			-- the Humanoid.Died connection we set up in OnCharacterAdded!
 		end
 	end
-end
-
-function PlayerManagerService:SetupPlayer(player)
-	self:SetPlayerState(player, "InHub")
 end
 
 function PlayerManagerService:OnCharacterAdded(player, character)
@@ -56,16 +41,21 @@ function PlayerManagerService:OnCharacterAdded(player, character)
 	humanoid.Died:Connect(function()
 		self:SetPlayerState(player, "Dead")
 		print(player.Name .. " has died.")
+
+		-- Wait a few seconds, then respawn them in the hub
+		task.delay(3, function()
+			if player then
+				self:SetPlayerState(player, "InHub")
+				player:LoadCharacter()
+			end
+		end)
 	end)
 end
 
+-- Universal function for changing states!
 function PlayerManagerService:SetPlayerState(player, newState)
-	self.PlayerStates[player] = newState
+	player:SetAttribute("PlayerState", newState)
 	print(player.Name .. "'s state changed to: " .. newState)
-end
-
-function PlayerManagerService:GetPlayerState(player)
-	return self.PlayerStates[player]
 end
 
 return PlayerManagerService
